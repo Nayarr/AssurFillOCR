@@ -1,5 +1,6 @@
 /.vscode
 OCR/data/
+output/
 
 # Fichiers temporaires
 *.tmp
