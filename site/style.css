@@ -1,0 +1,523 @@
+/* ============================================================
+   PCV FORM — Style minimaliste blanc
+   ============================================================ */
+
+/* ── Reset & base ──────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --primary:       #2563eb;
+  --primary-light: #eff6ff;
+  --primary-mid:   #bfdbfe;
+  --red:           #ef4444;
+  --red-light:     #fef2f2;
+  --blue-light:    #eff6ff;
+  --blue-mid:      #bfdbfe;
+  --slate-50:      #f8fafc;
+  --slate-100:     #f1f5f9;
+  --slate-200:     #e2e8f0;
+  --slate-400:     #94a3b8;
+  --slate-500:     #64748b;
+  --slate-700:     #334155;
+  --slate-900:     #0f172a;
+  --radius-sm:     6px;
+  --radius:        10px;
+  --radius-lg:     14px;
+  --radius-xl:     18px;
+  --shadow-sm:     0 1px 3px rgba(0,0,0,.07), 0 1px 2px rgba(0,0,0,.05);
+  --shadow:        0 4px 16px rgba(0,0,0,.08);
+  --transition:    150ms ease;
+  --font:          'Inter', system-ui, -apple-system, sans-serif;
+}
+
+html { font-size: 16px; }
+
+body {
+  font-family: var(--font);
+  background: var(--slate-50);
+  color: var(--slate-700);
+  line-height: 1.5;
+  min-height: 100vh;
+  padding: 2rem 1rem;
+}
+
+/* ── Layout wrappers ───────────────────────────────────────── */
+.space-y-4 > * + * { margin-top: 1rem; }
+.space-y-2 > * + * { margin-top: .5rem; }
+.space-x-2 > * + * { margin-left: .5rem; }
+.relative  { position: relative; }
+
+.bg-white  { background: #fff; }
+.overflow-hidden { overflow: hidden; }
+
+.p-4   { padding: 1rem; }
+.p-3   { padding: .75rem; }
+.p-0   { padding: 0; }
+.pb-0  { padding-bottom: 0; }
+.pt-2  { padding-top: .5rem; }
+.px-3  { padding-left: .75rem; padding-right: .75rem; }
+.py-1\.5 { padding-top: .375rem; padding-bottom: .375rem; }
+.p-4\.5  { padding: 1.125rem; }
+
+.mt-4  { margin-top: 1rem; }
+.mt-8  { margin-top: 2rem; }
+.mb-4  { margin-bottom: 1rem; }
+.ml-4  { margin-left: 1rem; }
+.md\:ml-4  { margin-left: 1rem; }
+
+.rounded-xl  { border-radius: var(--radius-xl); }
+.rounded-2xl { border-radius: 1rem; }
+.rounded-t-2xl { border-radius: 1rem 1rem 0 0; }
+
+/* ── Flexbox utils ─────────────────────────────────────────── */
+.flex        { display: flex; }
+.flex-col    { flex-direction: column; }
+.flex-auto   { flex: 1 1 auto; }
+.flex-1      { flex: 1 1 0%; }
+.items-center  { align-items: center; }
+.items-start   { align-items: flex-start; }
+.justify-end   { justify-content: flex-end; }
+.justify-between { justify-content: space-between; }
+.justify-center  { justify-content: center; }
+.min-w-0       { min-width: 0; }
+.w-full        { width: 100%; }
+.h-full        { height: 100%; }
+.w-96          { width: 24rem; }
+.hidden        { display: none !important; }
+.whitespace-nowrap { white-space: nowrap; }
+.inline-block  { display: inline-block; }
+
+/* ── Typography utils ──────────────────────────────────────── */
+.text-2xl   { font-size: 1.5rem;  line-height: 2rem; }
+.text-xl    { font-size: 1.25rem; line-height: 1.75rem; }
+.text-lg    { font-size: 1.125rem; line-height: 1.75rem; }
+.text-base  { font-size: 1rem;    line-height: 1.5rem; }
+.text-sm    { font-size: .875rem; line-height: 1.25rem; }
+.text-xs    { font-size: .75rem;  line-height: 1rem; }
+.font-bold     { font-weight: 700; }
+.font-semibold { font-weight: 600; }
+.leading-5     { line-height: 1.25rem; }
+.leading-4     { line-height: 1rem; }
+
+.text-primary    { color: var(--primary); }
+.text-slate-400  { color: var(--slate-400); }
+.text-slate-900  { color: var(--slate-900); }
+
+/* ── Grid ──────────────────────────────────────────────────── */
+.grid          { display: grid; }
+.grid-cols-2   { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.gap-4         { gap: 1rem; }
+
+/* ── Border / misc ─────────────────────────────────────────── */
+.border          { border: 1px solid var(--slate-200); }
+.border-r-2      { border-right: 2px solid var(--slate-200); }
+.border-slate-200 { border-color: var(--slate-200); }
+.cursor-pointer  { cursor: pointer; }
+.focus\:outline-none:focus { outline: none; }
+.border-none     { border: none; }
+.focus\:border-none:focus { border: none; }
+
+/* ── Outer card ────────────────────────────────────────────── */
+.bg-white.p-4.rounded-xl.space-y-4 {
+  background: #fff;
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow);
+  padding: 2rem;
+}
+
+/* ── Section title ─────────────────────────────────────────── */
+.pcv-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--slate-900);
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+}
+.pcv-title.margin { margin-bottom: .25rem; }
+.pcv-title i { color: var(--primary); font-size: 1.1rem; }
+
+.pcv-group-renderer--label {
+  font-size: .8125rem;
+  font-weight: 600;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  color: var(--slate-400);
+  padding-bottom: .25rem;
+  border-bottom: 1px solid var(--slate-100);
+}
+
+/* ── Form layout ───────────────────────────────────────────── */
+.pcv-json-form-layout-renderer[data-pcv-direction="column"] {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+/* ── Input wrapper ─────────────────────────────────────────── */
+.pcv-input-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: .375rem;
+}
+
+.pcv-input-wrapper--label {
+  font-size: .8125rem;
+  font-weight: 500;
+  color: var(--slate-500);
+  line-height: 1.4;
+}
+
+.pcv-input-wrapper--input-wrapper {
+  position: relative;
+}
+
+.pcv-input-wrapper--input {
+  position: relative;
+}
+
+.pcv-input-wrapper--input-inline {
+  display: flex;
+  align-items: center;
+  background: #fff;
+  border: 1.5px solid var(--slate-200);
+  border-radius: var(--radius);
+  padding: 0 .875rem;
+  height: 42px;
+  transition: border-color var(--transition), box-shadow var(--transition);
+  gap: .5rem;
+}
+.pcv-input-wrapper--input-inline:focus-within {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(37,99,235,.12);
+}
+
+/* Error state */
+.pcv-input-wrapper.validation-error .pcv-input-wrapper--input-inline {
+  border-color: var(--red);
+}
+.pcv-input-wrapper.validation-error .pcv-input-wrapper--input-inline:focus-within {
+  box-shadow: 0 0 0 3px rgba(239,68,68,.12);
+}
+
+.pcv-input-wrapper--main-input,
+.pcv-html-input {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-family: var(--font);
+  font-size: .875rem;
+  color: var(--slate-900);
+  min-width: 0;
+}
+.pcv-input-wrapper--main-input::placeholder { color: var(--slate-400); }
+
+/* Clear / toggle icons inside input */
+.pcv-input-wrapper--input-inline > i {
+  color: var(--slate-400);
+  font-size: .875rem;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: color var(--transition);
+}
+.pcv-input-wrapper--input-inline > i:hover { color: var(--slate-700); }
+
+/* ── Dropdown ──────────────────────────────────────────────── */
+.pcv-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0; right: 0;
+  background: #fff;
+  border: 1.5px solid var(--slate-200);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  z-index: 100;
+  overflow: hidden;
+}
+
+.pcv-dropdown--options {
+  max-height: 240px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--slate-200) transparent;
+}
+
+.pcv-dropdown--option {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  padding: .6rem .875rem;
+  font-size: .875rem;
+  color: var(--slate-700);
+  cursor: pointer;
+  transition: background var(--transition);
+}
+.pcv-dropdown--option:hover {
+  background: var(--primary-light);
+  color: var(--primary);
+}
+.pcv-dropdown--option.active {
+  background: var(--primary-light);
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.pcv-dropdown--option-labels { flex: 1; }
+.pcv-dropdown--option-label  { font-size: .875rem; }
+.pcv-dropdown--option-sub-label {
+  font-size: .75rem;
+  color: var(--slate-400);
+}
+
+.pcv-dropdown--placeholder {
+  padding: 1rem .875rem;
+  font-size: .875rem;
+  color: var(--slate-400);
+  text-align: center;
+}
+
+/* ── Alert / info banners ──────────────────────────────────── */
+.pcv-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: .5rem;
+  padding: .625rem .875rem;
+  border-radius: var(--radius-sm);
+  font-size: .8125rem;
+  line-height: 1.5;
+}
+
+/* Blue info */
+.pcv-alert[data-pcv-color="blue"] {
+  background: var(--blue-light);
+  color: #1d4ed8;
+  border: 1px solid var(--blue-mid);
+}
+.pcv-alert[data-pcv-color="blue"] .pcv-alert--icon { color: var(--primary); }
+
+/* Red error */
+.pcv-alert[data-pcv-color="red"] {
+  background: var(--red-light);
+  color: var(--red);
+  border: 1px solid #fecaca;
+}
+.pcv-alert[data-pcv-color="red"] .pcv-alert--icon { color: var(--red); }
+
+.pcv-alert--icon { flex-shrink: 0; margin-top: .125rem; }
+.pcv-alert--text { flex: 1; }
+.detailsClasses  { font-size: .8125rem; }
+
+/* Messages container */
+.input-wrapper--messages { margin-top: .25rem; }
+.input-wrapper--messages:empty { display: none; }
+
+/* ── Radio buttons ─────────────────────────────────────────── */
+.pcv-input-radio--items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem;
+  margin-top: .25rem;
+}
+
+.pcv-input-radio-item {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  cursor: pointer;
+}
+
+.pcv-input-radio-item--checkbox-wrapper {
+  position: relative;
+  width: 18px; height: 18px;
+  flex-shrink: 0;
+}
+
+/* Hide native radio */
+.pcv-input-radio-item--checkbox-wrapper input[type="radio"] {
+  position: absolute;
+  opacity: 0;
+  width: 100%; height: 100%;
+  margin: 0;
+  cursor: pointer;
+}
+
+/* Custom radio circle */
+.pcv-input-radio-item--checkbox {
+  width: 18px; height: 18px;
+  border: 2px solid var(--slate-300, #cbd5e1);
+  border-radius: 50%;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color var(--transition), background var(--transition);
+  pointer-events: none;
+}
+.pcv-input-radio-item--checkbox i {
+  display: none;
+}
+
+/* Checked state */
+.pcv-input-radio-item.checked .pcv-input-radio-item--checkbox,
+.pcv-input-radio-item--checkbox-wrapper input[type="radio"]:checked
+  ~ .pcv-input-radio-item--checkbox {
+  border-color: var(--primary);
+  background: var(--primary);
+}
+.pcv-input-radio-item.checked .pcv-input-radio-item--checkbox::after {
+  content: '';
+  width: 6px; height: 6px;
+  background: #fff;
+  border-radius: 50%;
+}
+
+/* Hover ring */
+.pcv-input-radio-item--checkbox-wrapper input[type="radio"]:focus-visible
+  ~ .pcv-input-radio-item--checkbox {
+  box-shadow: 0 0 0 3px rgba(37,99,235,.2);
+}
+
+/* Pricing style variant — pill shape */
+.pcv-input-radio-item.pricing {
+  background: var(--slate-50);
+  border: 1.5px solid var(--slate-200);
+  border-radius: var(--radius);
+  padding: .5rem .875rem;
+  gap: .625rem;
+  transition: border-color var(--transition), background var(--transition);
+}
+.pcv-input-radio-item.pricing:hover {
+  border-color: var(--primary-mid);
+  background: var(--primary-light);
+}
+.pcv-input-radio-item.pricing.checked {
+  border-color: var(--primary);
+  background: var(--primary-light);
+}
+
+/* Radio label */
+.pcv-label {
+  font-size: .875rem;
+  color: var(--slate-700);
+  cursor: pointer;
+  user-select: none;
+}
+.pcv-label.pricing {
+  font-size: .875rem;
+  font-weight: 500;
+}
+.pcv-input-radio-item.pricing.checked .pcv-label {
+  color: var(--primary);
+  font-weight: 600;
+}
+
+/* ── Primary button ────────────────────────────────────────── */
+.pcv-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: .5rem;
+  padding: .625rem 1.5rem;
+  border: none;
+  border-radius: var(--radius);
+  font-family: var(--font);
+  font-size: .875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--transition), transform var(--transition), box-shadow var(--transition);
+}
+.pcv-btn[data-pcv-color="primary"] {
+  background: var(--primary);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(37,99,235,.3);
+}
+.pcv-btn[data-pcv-color="primary"]:hover {
+  background: #1d4ed8;
+  box-shadow: 0 4px 12px rgba(37,99,235,.4);
+  transform: translateY(-1px);
+}
+.pcv-btn[data-pcv-color="primary"]:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 4px rgba(37,99,235,.25);
+}
+.pcv-btn[aria-busy="true"] { opacity: .6; cursor: wait; }
+.pcv-btn--text { line-height: 1; }
+
+/* ── "Nouvelle demande" inline button ──────────────────────── */
+button.bg-white.whitespace-nowrap {
+  display: inline-flex;
+  align-items: center;
+  gap: .375rem;
+  padding: .4rem 1rem;
+  border-radius: 999px;
+  border: 1.5px solid var(--primary);
+  background: transparent;
+  color: var(--primary);
+  font-family: var(--font);
+  font-size: .75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--transition), color var(--transition);
+  white-space: nowrap;
+}
+button.bg-white.whitespace-nowrap:hover {
+  background: var(--primary);
+  color: #fff;
+}
+
+/* ── Tickets / "Demandes" section ──────────────────────────── */
+#merlin-v2-prospect-tickets {
+  background: #fff;
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-sm);
+  padding: 1.5rem 1.5rem 0;
+}
+
+#merlin-v2-prospect-tickets .relative.text-2xl.font-bold {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--slate-900);
+}
+
+/* Search bar inside tickets */
+#merlin-v2-prospect-tickets label.flex.flex-auto {
+  align-items: center;
+  background: var(--slate-50);
+  border: 1.5px solid var(--slate-200);
+  border-radius: var(--radius);
+  padding: 0 .75rem;
+  height: 38px;
+}
+#merlin-v2-prospect-tickets input.flex-auto {
+  font-family: var(--font);
+  font-size: .875rem;
+  color: var(--slate-900);
+  background: transparent;
+}
+#merlin-v2-prospect-tickets input.flex-auto::placeholder { color: var(--slate-400); }
+
+/* ── Flag sprites (placeholder blocks) ────────────────────── */
+.pcv-flag {
+  display: inline-block;
+  width: 20px;
+  height: 14px;
+  border-radius: 2px;
+  background: var(--slate-200);
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+
+/* ── Scrollbar styling for dropdown ───────────────────────── */
+.pcv-dropdown--options::-webkit-scrollbar { width: 4px; }
+.pcv-dropdown--options::-webkit-scrollbar-track { background: transparent; }
+.pcv-dropdown--options::-webkit-scrollbar-thumb {
+  background: var(--slate-200);
+  border-radius: 2px;
+}
+
+/* ── Focus outline global ──────────────────────────────────── */
+*:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
