@@ -48,7 +48,7 @@ def parse(texts: list[str], scores: list[float]) -> dict:
         # Date naissance — champ 3.
         elif data["date_naissance"] is None:
             date = _parse_date(text)
-            if date is not None and (data["date_obtention_permis"] is None or date < data["date_obtention_permis"]):
+            if date is not None and (date_delivre_permis is None or date < date_delivre_permis):
                 data["date_naissance"] = date
 
         # Préfecture — champ 4c.

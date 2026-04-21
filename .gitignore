@@ -1,2 +1,11 @@
 /.vscode
 OCR/data/
+
+# Fichiers temporaires
+*.tmp
+*.temp
+*~
+.DS_Store
+__pycache__/
+*.py[cod]
+*.pyo
