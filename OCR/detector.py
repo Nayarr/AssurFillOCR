@@ -3,6 +3,7 @@ Détecte le type de permis de conduire depuis les textes OCR
 et retourne le module parser correspondant.
 """
 from parsers import permis_fr_nouveau_recto
+from parsers import permis_fr_nouveau_verso
 # Importe ici les autres parsers au fur et à mesure :
 # from parsers import permis_fr_ancien
 # from parsers import permis_dz_nouveau
@@ -20,7 +21,7 @@ def detect_and_parse(texts: list[str], scores: list[float]) -> dict:
         "9." in texts and "10." in texts
         and not has_mrz
     ):
-        return {"type": "permis_fr_nouveau_verso", "textes_bruts": texts}
+        return permis_fr_nouveau_verso.parse(texts, scores)
 
     # Permis FR nouveau recto (post-2013) — MRZ D1FRA + labels 4a./4b.
     if (
