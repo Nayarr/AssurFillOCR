@@ -12,59 +12,36 @@ def parse(texts: list[str], scores: list[float]) -> dict:
         "prenom": None,
         "date_naissance": None,
         "date_expiration": None,
-        "prefecture": None,
         "numero_permis": None,
-        "categories": None,
     }
-    
-    date_delivre_permis = None
+
+    dates_found = []
 
     for i, (text, score) in enumerate(zip(texts, scores)):
         if score < 0.5:
             continue
 
-        # Nom — extrait depuis la ligne MRZ (D1FRA...NOM<)
-        if data["nom"] is None and "<" in text and len(text) > 15:
-            matches = re.findall(r"([A-Z]{2,})<", text)
-            if matches:
-                data["nom"] = matches[-1]
+        # Numéro permis — format A########
+        if data["numero_permis"] is None and (match := re.match(r"^([A-Z]\d{8})$", text.strip())):
+            data["numero_permis"] = match.group(0)
 
-        # Prénom — champ 2.
-        elif data["prenom"] is None and re.match(r"^2\.", text):
-            s = re.sub(r"^\d+[a-z]?\.\d*\s*", "", text).strip()
-            s = re.sub(r"^[^A-Za-zÀ-ÿ]{1,2}", "", s).strip()
-            s = re.sub(r"[^A-Za-zÀ-ÿ\-']{1,2}$", "", s).strip()
-            data["prenom"] = s or None
-
-
-        # Date obtention permis — champ 4a.
-        elif date_delivre_permis is None and re.match(r"^4a\.", text):
-            date_delivre_permis = _parse_date(text)
-
-        # Date expiration — champ 4b.
-        elif data["date_expiration"] is None and re.match(r"^4b\.", text):
-            data["date_expiration"] = _parse_date(text)
-            
-        # Date naissance — champ 3.
-        elif data["date_naissance"] is None:
+        else:
             date = _parse_date(text)
-            if date is not None and (date_delivre_permis is None or date < date_delivre_permis):
-                data["date_naissance"] = date
+            if date is not None:
+                if len(dates_found) < 3:
+                    dates_found.append(date)
 
-        # Préfecture — champ 4c.
-        elif data["prefecture"] is None and re.match(r"^4c\.", text):
-            data["prefecture"] = re.sub(r"^4c\.", "", text).strip() or None
+            # Après la 2ème date : 1ère ligne uppercase = nom, 2ème = prénom
+            elif len(dates_found) >= 2 and re.match(r"^[A-Z]{2,}$", text.strip()):
+                if data["nom"] is None:
+                    data["nom"] = text.strip()
+                elif data["prenom"] is None:
+                    data["prenom"] = text.strip()
 
-        # Numéro permis — champ 5. suivi du numéro dans le bloc suivant
-        elif re.match(r"^5\.?$", text.strip()):
-            if i + 1 < len(texts) and scores[i + 1] >= 0.8:
-                candidate = texts[i + 1].strip()
-                if re.match(r"[A-Z0-9]{7,12}$", candidate):
-                    data["numero_permis"] = candidate
-
-        # Catégories — champ 9.
-        elif data["categories"] is None and re.match(r"^9\.", text):
-            data["categories"] = re.sub(r"^9\.", "", text).strip() or None
+    if len(dates_found) >= 2:
+        data["date_expiration"] = dates_found[1]
+    if len(dates_found) >= 3:
+        data["date_naissance"] = dates_found[2]
 
     return data
 
