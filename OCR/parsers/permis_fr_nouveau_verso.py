@@ -16,34 +16,36 @@ def parse(texts: list[str], scores: list[float]) -> dict:
     """
     data = {
         "type": "permis_fr_nouveau_verso",
-        "dates_categories": {},
+        "obtention_B": None,
     }
 
-    for i, (text, score) in enumerate(zip(texts, scores)):
-        if score < 0.5:
-            continue
-
+    dates_categories = {}
 
     # Dates par catégorie — look-ahead de 2 lignes après chaque catégorie EU
     for i, text in enumerate(texts):
         cat = text.strip()
-        if cat not in _CATEGORIES_EU or cat in data["dates_categories"]:
+        if cat not in _CATEGORIES_EU or cat in dates_categories:
             continue
         for j in range(i + 1, min(i + 3, len(texts))):
             date = _parse_date(texts[j])
             if date:
-                data["dates_categories"][cat] = date
+                dates_categories[cat] = date
                 break
 
-    if not data["dates_categories"]:
-        data["dates_categories"] = None
+    data["obtention_B"] = (
+        dates_categories.get("B")
+        or dates_categories.get("B1")
+        or dates_categories.get("AM")
+    )
 
     return data
 
 
 def _parse_date(raw: str) -> str | None:
-    """Extrait DD.MM.YYYY ou DD/MM/YYYY et retourne YYYY-MM-DD."""
-    m = re.search(r"(\d{2})[./](\d{2})[./](\d{4})", raw)
-    if m:
-        return f"{m.group(3)}-{m.group(2)}-{m.group(1)}"
-    return None
+    """Extrait DD.MM.YY et retourne YYYY-MM-DD (YY>=50 → 19xx, sinon 20xx)."""
+    m = re.search(r"(\d{2})[./](\d{2})[./](\d{2})", raw)
+    if not m:
+        return None
+    yy = int(m.group(3))
+    year = 1900 + yy if yy >= 50 else 2000 + yy
+    return f"{year}-{m.group(2)}-{m.group(1)}"
