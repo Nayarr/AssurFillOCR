@@ -4,6 +4,7 @@ et retourne le module parser correspondant.
 """
 from parsers import permis_fr_nouveau_recto
 from parsers import permis_fr_nouveau_verso
+from parsers import permis_dz_nouveau_verso
 # Importe ici les autres parsers au fur et à mesure :
 # from parsers import permis_fr_ancien
 # from parsers import permis_dz_nouveau
@@ -34,6 +35,10 @@ def detect_and_parse(texts: list[str], scores: list[float]) -> dict:
     # Permis FR ancien — label "1.NOM" ou "PRENOM" + "SOUS-PREFET"
     # if "SOUS-PREFET" in joined and any("1.NOM" in t or t == "PRENOM" for t in texts_upper):
     #     return permis_fr_ancien.parse(texts, scores)
+
+    # Permis DZ nouveau verso — MRZ avec "DZA" + "DLDZAA"
+    if any("DLDZAA" in t or "DZA" in t for t in texts_upper):
+        return permis_dz_nouveau_verso.parse(texts, scores)
 
     # Permis DZ nouveau — "DRIVING" + MRZ avec "DZA" + "DLDZAA"
     # if "DRIVING" in joined and any("DLDZAA" in t or "DZA" in t for t in texts_upper):
