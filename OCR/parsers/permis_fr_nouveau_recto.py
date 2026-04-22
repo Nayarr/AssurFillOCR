@@ -12,9 +12,7 @@ def parse(texts: list[str], scores: list[float]) -> dict:
         "prenom": None,
         "date_naissance": None,
         "date_expiration": None,
-        "prefecture": None,
         "numero_permis": None,
-        "categories": None,
     }
     
     date_delivre_permis = None
@@ -23,8 +21,19 @@ def parse(texts: list[str], scores: list[float]) -> dict:
         if score < 0.5:
             continue
 
-        # Nom — extrait depuis la ligne MRZ (D1FRA...NOM<)
-        if data["nom"] is None and "<" in text and len(text) > 15:
+        # Ligne MRZ : D1FRA<NUMERO_PERMIS(9)>...<NOM<
+        if re.match(r"^D1FRA", text.strip()) and "<" in text and len(text) > 15:
+            if data["numero_permis"] is None:
+                m = re.search(r"D1FRA([A-Z0-9]{9})", text)
+                if m:
+                    data["numero_permis"] = m.group(1)
+            if data["nom"] is None:
+                matches = re.findall(r"([A-Z]{2,})<", text)
+                if matches:
+                    data["nom"] = matches[-1]
+
+        # Nom — extrait depuis une autre ligne MRZ (sans D1FRA)
+        elif data["nom"] is None and "<" in text and len(text) > 15:
             matches = re.findall(r"([A-Z]{2,})<", text)
             if matches:
                 data["nom"] = matches[-1]
@@ -50,21 +59,7 @@ def parse(texts: list[str], scores: list[float]) -> dict:
             date = _parse_date(text)
             if date is not None and (date_delivre_permis is None or date < date_delivre_permis):
                 data["date_naissance"] = date
-
-        # Préfecture — champ 4c.
-        elif data["prefecture"] is None and re.match(r"^4c\.", text):
-            data["prefecture"] = re.sub(r"^4c\.", "", text).strip() or None
-
-        # Numéro permis — champ 5. suivi du numéro dans le bloc suivant
-        elif re.match(r"^5\.?$", text.strip()):
-            if i + 1 < len(texts) and scores[i + 1] >= 0.8:
-                candidate = texts[i + 1].strip()
-                if re.match(r"[A-Z0-9]{7,12}$", candidate):
-                    data["numero_permis"] = candidate
-
-        # Catégories — champ 9.
-        elif data["categories"] is None and re.match(r"^9\.", text):
-            data["categories"] = re.sub(r"^9\.", "", text).strip() or None
+                
 
     return data
 

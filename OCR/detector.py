@@ -5,6 +5,7 @@ et retourne le module parser correspondant.
 from parsers import permis_fr_nouveau_recto
 from parsers import permis_fr_nouveau_verso
 from parsers import permis_dz_nouveau_verso
+from parsers import permis_dz_nouveau_recto
 # Importe ici les autres parsers au fur et à mesure :
 # from parsers import permis_fr_ancien
 # from parsers import permis_dz_nouveau
@@ -19,7 +20,7 @@ def detect_and_parse(texts: list[str], scores: list[float]) -> dict:
     # Permis FR nouveau verso — labels 9. et 10. (tableau catégories EU), sans MRZ <<<
     has_mrz = any("<<<" in t for t in texts_upper)
     if (
-        "9." in texts and "10." in texts
+        "9." in texts and "10." in texts or "10." in texts and "11." in texts
         and not has_mrz
     ):
         return permis_fr_nouveau_verso.parse(texts, scores)
@@ -43,6 +44,9 @@ def detect_and_parse(texts: list[str], scores: list[float]) -> dict:
     # Permis DZ nouveau — "DRIVING" + MRZ avec "DZA" + "DLDZAA"
     # if "DRIVING" in joined and any("DLDZAA" in t or "DZA" in t for t in texts_upper):
     #     return permis_dz_nouveau.parse(texts, scores)
+    # Permis DZ nouveau — "DRIVING" 
+    if "DRIVING" in joined:
+         return permis_dz_nouveau_recto.parse(texts, scores)
 
     # Permis DZ ancien — "ALGERIE" + liste de langues EU
     # if "ALGERIE" in joined and "RIJBEWIJS" in joined:
