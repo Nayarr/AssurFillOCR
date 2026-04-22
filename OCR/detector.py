@@ -18,7 +18,7 @@ def detect_and_parse(texts: list[str], scores: list[float]) -> dict:
     # Permis FR nouveau verso — labels 9. et 10. (tableau catégories EU), sans MRZ <<<
     has_mrz = any("<<<" in t for t in texts_upper)
     if (
-        "9." in texts and "10." in texts
+        "9." in texts and "10." in texts or "10." in texts and "11." in texts
         and not has_mrz
     ):
         return permis_fr_nouveau_verso.parse(texts, scores)
