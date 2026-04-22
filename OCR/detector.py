@@ -41,9 +41,6 @@ def detect_and_parse(texts: list[str], scores: list[float]) -> dict:
     if any("DLDZAA" in t or "DZA" in t for t in texts_upper):
         return permis_dz_nouveau_verso.parse(texts, scores)
 
-    # Permis DZ nouveau — "DRIVING" + MRZ avec "DZA" + "DLDZAA"
-    # if "DRIVING" in joined and any("DLDZAA" in t or "DZA" in t for t in texts_upper):
-    #     return permis_dz_nouveau.parse(texts, scores)
     # Permis DZ nouveau — "DRIVING" 
     if "DRIVING" in joined:
          return permis_dz_nouveau_recto.parse(texts, scores)
