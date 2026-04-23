@@ -11,6 +11,16 @@ from detector import detect_and_parse
 UPSCALE_FACTOR = 2
 MAX_SIDE = 3840
 
+# Configurer ici les dossiers à analyser par type de document.
+# La clé est un label libre, la valeur est le chemin vers le dossier d'images.
+# Commenter/décommenter les entrées selon les types voulus.
+DOCUMENT_FOLDERS = {
+    "permis_fr_nouveau_recto": os.path.join(os.path.dirname(__file__), "data", "permis_fr_nouveau_recto"),
+    "permis_fr_nouveau_verso": os.path.join(os.path.dirname(__file__), "data", "permis_fr_nouveau_verso"),
+    "permis_dz_nouveau_recto": os.path.join(os.path.dirname(__file__), "data", "permis_dz_nouveau_recto"),
+    "permis_dz_nouveau_verso": os.path.join(os.path.dirname(__file__), "data", "permis_dz_nouveau_verso"),
+}
+
 
 def upscale_image(image_path: str) -> np.ndarray:
     img = cv2.imread(image_path)
@@ -34,47 +44,51 @@ ocr = PaddleOCR(
     use_textline_orientation=True,
 )
 
-data_dir = os.path.join(os.path.dirname(__file__), "data")
 output_dir = os.path.join(os.path.dirname(__file__), "..", "output")
 os.makedirs(output_dir, exist_ok=True)
 
-image_files = [f for f in os.listdir(data_dir) if f.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp'))]
+for doc_type, data_dir in DOCUMENT_FOLDERS.items():
+    if not os.path.isdir(data_dir):
+        print(f"\n[{doc_type}] Dossier introuvable, ignoré : {data_dir}")
+        continue
 
-for image_file in image_files:
-    image_path = os.path.join(data_dir, image_file)
-    print(f"\nTraitement de : {image_file}")
+    image_files = [f for f in os.listdir(data_dir) if f.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp'))]
+    print(f"\n=== {doc_type} : {len(image_files)} image(s) ===")
 
-    result = ocr.predict(image_path)
+    for image_file in image_files:
+        image_path = os.path.join(data_dir, image_file)
+        print(f"\nTraitement de : {image_file}")
 
-    for res in result:
-        parsed = detect_and_parse(res['rec_texts'], res['rec_scores'])
+        result = ocr.predict(image_path)
 
-        if has_null_fields(parsed):
-            print(f"  Champs null détectés, retry avec upscale...")
-            upscaled = upscale_image(image_path)
-            result_up = ocr.predict(upscaled)
-            for res_up in result_up:
-                parsed_up = detect_and_parse(res_up['rec_texts'], res_up['rec_scores'])
-                # On garde l'upscale seulement si il réduit le nombre de nulls
-                if sum(v is None for k, v in parsed_up.items() if k != "type") < \
-                   sum(v is None for k, v in parsed.items() if k != "type"):
-                    parsed = parsed_up
-                    res = res_up
-                    print(f"  Upscale retenu.")
-                else:
-                    print(f"  Upscale non retenu (pas d'amélioration).")
-                break
+        for res in result:
+            parsed = detect_and_parse(res['rec_texts'], res['rec_scores'])
 
-        res.save_to_img(output_dir)
-        res.save_to_json(output_dir)
+            if has_null_fields(parsed):
+                print(f"  Champs null détectés, retry avec upscale...")
+                upscaled = upscale_image(image_path)
+                result_up = ocr.predict(upscaled)
+                for res_up in result_up:
+                    parsed_up = detect_and_parse(res_up['rec_texts'], res_up['rec_scores'])
+                    if sum(v is None for k, v in parsed_up.items() if k != "type") < \
+                       sum(v is None for k, v in parsed.items() if k != "type"):
+                        parsed = parsed_up
+                        res = res_up
+                        print(f"  Upscale retenu.")
+                    else:
+                        print(f"  Upscale non retenu (pas d'amélioration).")
+                    break
 
-        print(f"  Type détecté : {parsed.get('type')}")
-        for key, val in parsed.items():
-            if key != "type":
-                print(f"  {key:<28}: {val}")
+            res.save_to_img(output_dir)
+            res.save_to_json(output_dir)
 
-        out_name = os.path.splitext(image_file)[0] + "_parsed.json"
-        with open(os.path.join(output_dir, out_name), "w", encoding="utf-8") as f:
-            json.dump(parsed, f, ensure_ascii=False, indent=2)
+            print(f"  Type détecté : {parsed.get('type')}")
+            for key, val in parsed.items():
+                if key != "type":
+                    print(f"  {key:<28}: {val}")
 
-    print(f"✓ {image_file} terminé")
+            out_name = os.path.splitext(image_file)[0] + "_parsed.json"
+            with open(os.path.join(output_dir, out_name), "w", encoding="utf-8") as f:
+                json.dump(parsed, f, ensure_ascii=False, indent=2)
+
+        print(f"✓ {image_file} terminé")
