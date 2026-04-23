@@ -15,10 +15,10 @@ MAX_SIDE = 3840
 # La clé est un label libre, la valeur est le chemin vers le dossier d'images.
 # Commenter/décommenter les entrées selon les types voulus.
 DOCUMENT_FOLDERS = {
-    "permis_fr_nouveau_recto": os.path.join(os.path.dirname(__file__), "data", "permis_fr_nouveau_recto"),
-    "permis_fr_nouveau_verso": os.path.join(os.path.dirname(__file__), "data", "permis_fr_nouveau_verso"),
-    "permis_dz_nouveau_recto": os.path.join(os.path.dirname(__file__), "data", "permis_dz_nouveau_recto"),
-    "permis_dz_nouveau_verso": os.path.join(os.path.dirname(__file__), "data", "permis_dz_nouveau_verso"),
+    "permis_fr_nouveau_recto": os.path.join(os.path.dirname(__file__), "data", "fr", "new", "recto"),
+    "permis_fr_nouveau_verso": os.path.join(os.path.dirname(__file__), "data", "fr", "new", "verso"),
+    "permis_dz_nouveau_recto": os.path.join(os.path.dirname(__file__), "data", "dz", "new", "recto"),
+    "permis_dz_nouveau_verso": os.path.join(os.path.dirname(__file__), "data", "dz", "new", "verso"),
 }
 
 

@@ -24,14 +24,6 @@ def parse(texts: list[str], scores: list[float]) -> dict:
         if score >= 0.5 and text.count("<") >= 5 and re.search(r"[A-Z0-9<]{15,}", text)
     ]
     
-    print("=== RAW TEXTS ===")
-    for t, s in zip(texts, scores):
-        print(f"  score={s:.2f} | repr={repr(t)}")
-        
-    print("=== MRZ LINES RETENUES ===")
-    for line in mrz_lines:
-        print(f"  {repr(line)}")
-
 
     
 
