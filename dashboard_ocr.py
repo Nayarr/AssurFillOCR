@@ -30,7 +30,6 @@ COLORS = px.colors.qualitative.Set2
 
 # ─── Data loading ─────────────────────────────────────────────────────────────
 
-@st.cache_data
 def load_data():
     records = []
     for path in sorted(OUTPUT_DIR.glob("*_parsed.json")):
@@ -70,10 +69,9 @@ def is_null(value) -> bool:
 
 # ─── Computed frames ──────────────────────────────────────────────────────────
 
-@st.cache_data
-def compute_frames(_records):
-    structured = [r for r in _records if r.get("type") != "inconnu"]
-    inconnus = [r for r in _records if r.get("type") == "inconnu"]
+def compute_frames(records):
+    structured = [r for r in records if r.get("type") != "inconnu"]
+    inconnus = [r for r in records if r.get("type") == "inconnu"]
 
     # ── 1. Null par attribut global
     champ_stats = defaultdict(lambda: {"total": 0, "null": 0})
@@ -122,7 +120,7 @@ def compute_frames(_records):
 
     # ── 4. Scores OCR
     score_rows = []
-    for r in _records:
+    for r in records:
         if r["_score_mean"] is not None:
             score_rows.append({
                 "fichier": r["_fichier"],
@@ -151,7 +149,7 @@ def compute_frames(_records):
     # ── 6. Recto / verso : appariement par numéro consécutif
     # On suppose que les fichiers sont nommés de façon ordonnée et que
     # recto et verso sont des photos consécutives d'un même lot.
-    sorted_recs = sorted(_records, key=lambda r: r["_stem"])
+    sorted_recs = sorted(records, key=lambda r: r["_stem"])
     pairs = []
     i = 0
     while i < len(sorted_recs) - 1:
@@ -562,7 +560,6 @@ def main():
         choice = st.radio("Page", list(pages.keys()))
         st.divider()
         if st.button("🔄 Rafraîchir les données"):
-            st.cache_data.clear()
             st.rerun()
         st.caption(f"{len(records)} fichiers chargés")
 
