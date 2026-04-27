@@ -1,12 +1,29 @@
 import re
 
-_CATEGORIES_EU = {
+_CATEGORIES_EU = frozenset({
     "AM", "A1", "A2", "A",
     "B1", "B", "BE",
     "C1", "C1E", "C", "CE",
     "D1", "D1E", "D", "DE",
     "L", "T",
-}
+})
+
+_DATE_WINDOW = 5
+
+
+def _match_category(raw: str) -> str | None:
+    """
+    Retourne la catégorie EU correspondante ou None.
+    Nettoie le bruit OCR (caractères non-alphanum) puis tente des préfixes de
+    longueur 3 et 2 — pas 1, pour éviter les faux positifs sur A/B/C/D/L/T.
+    """
+    cat = re.sub(r"[^A-Z0-9]", "", raw.strip().upper())
+    if cat in _CATEGORIES_EU:
+        return cat
+    for length in [3, 2]:
+        if len(cat) >= length and cat[:length] in _CATEGORIES_EU:
+            return cat[:length]
+    return None
 
 
 def parse(texts: list[str], scores: list[float]) -> dict:
@@ -21,12 +38,11 @@ def parse(texts: list[str], scores: list[float]) -> dict:
 
     dates_categories = {}
 
-    # Dates par catégorie — look-ahead de 2 lignes après chaque catégorie EU
     for i, text in enumerate(texts):
-        cat = text.strip()
-        if cat not in _CATEGORIES_EU or cat in dates_categories:
+        cat = _match_category(text)
+        if cat is None or cat in dates_categories:
             continue
-        for j in range(i + 1, min(i + 3, len(texts))):
+        for j in range(i + 1, min(i + 1 + _DATE_WINDOW, len(texts))):
             date = _parse_date(texts[j])
             if date:
                 dates_categories[cat] = date
@@ -49,3 +65,4 @@ def _parse_date(raw: str) -> str | None:
     yy = int(m.group(3))
     year = 1900 + yy if yy >= 50 else 2000 + yy
     return f"{year}-{m.group(2)}-{m.group(1)}"
+
