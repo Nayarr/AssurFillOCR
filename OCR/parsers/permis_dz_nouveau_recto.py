@@ -17,7 +17,7 @@ def parse(texts: list[str], scores: list[float]) -> dict:
 
     dates_found = []
 
-    for i, (text, score) in enumerate(zip(texts, scores)):
+    for text, score in zip(texts, scores):
         if score < 0.5:
             continue
 
@@ -31,8 +31,8 @@ def parse(texts: list[str], scores: list[float]) -> dict:
                 if len(dates_found) < 3:
                     dates_found.append(date)
 
-            # Après la 2ème date : 1ère ligne uppercase = nom, 2ème = prénom
-            elif len(dates_found) >= 2 and re.match(r"^[A-Z]{2,}$", text.strip()):
+            # Après la 2ème date : 1ère ligne uppercase = nom, 2ème = prénom (composés acceptés)
+            elif len(dates_found) >= 2 and re.match(r"^[A-Z][A-Z\s\-']+$", text.strip()):
                 if data["nom"] is None:
                     data["nom"] = text.strip()
                 elif data["prenom"] is None:
@@ -52,3 +52,4 @@ def _parse_date(raw: str) -> str | None:
     if m:
         return f"{m.group(3)}-{m.group(2)}-{m.group(1)}"
     return None
+
