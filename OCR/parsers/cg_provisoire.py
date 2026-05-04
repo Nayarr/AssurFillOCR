@@ -1,9 +1,53 @@
 import re
+from difflib import get_close_matches
 
-from .vehicle_ref import fix_marque_modele, PF_MAX
+from .vehicle_ref import fix_marque_modele, PF_MAX, TOUS_MODELES
 
 _PLAQUE_WW_RE = re.compile(r"(WW-\d{3}-[A-Z]{2})", re.IGNORECASE)
 _ALGERIE_RE = re.compile(r"ALG[ÉE]RIE", re.IGNORECASE)
+
+
+def _est_candidat_modele(ligne: str) -> bool:
+    """Vrai si la ligne peut être un nom de modèle."""
+    if not ligne or len(ligne) < 3 or len(ligne) > 20:
+        return False
+    if re.match(r"^[A-Z0-9]{17}$", ligne):
+        return False
+    # Lettres + espaces + tirets (ex: CLIO, DUSTER, RIFTER ALLURE)
+    if re.match(r"^[A-Z][A-Z \-]{2,}$", ligne) and not re.search(r"\d", ligne):
+        return True
+    # Modèles numériques purs : seulement ceux connus dans la référence (ex: 208, 3008)
+    if re.match(r"^\d{3,4}$", ligne) and ligne.upper() in TOUS_MODELES:
+        return True
+    # Alphanum courts (ex: CL10→CLIO) — lettres puis 1-2 chiffres
+    if re.match(r"^[A-Z]{2,}\d{1,2}$", ligne) and len(ligne) <= 7:
+        return True
+    return False
+
+
+def _est_denomination_candidate(ligne: str) -> bool:
+    """Vrai si la ligne peut être une dénomination commerciale multi-mots."""
+    if not ligne or len(ligne) < 3:
+        return False
+    if re.search(r"\d{5,}", ligne):
+        return False
+    if re.match(r"^[A-Z0-9]{17}$", ligne):
+        return False
+    return bool(re.match(r"^[A-Z][A-Z0-9 \-]{2,}$", ligne))
+
+
+def _extraire_modele_denomination(denomination: str) -> str | None:
+    """Extrait un modèle connu depuis une dénomination commerciale complexe.
+    Ex: 'NEW BERLINGO 1.6 HDI 92C' → 'BERLINGO'
+    """
+    mots = [m for m in denomination.upper().split() if len(m) >= 3]
+    for mot in mots:
+        if mot in TOUS_MODELES:
+            return mot
+        resultats = get_close_matches(mot, TOUS_MODELES, n=1, cutoff=0.88)
+        if resultats:
+            return resultats[0]
+    return None
 
 
 def parse(texts: list[str], scores: list[float]) -> dict:
@@ -21,6 +65,7 @@ def parse(texts: list[str], scores: list[float]) -> dict:
     en_section_prop = False
     lignes_prop: list[str] = []
     dernier_label = None
+    denomination_candidate: str | None = None
 
     for i, (texte, score) in enumerate(zip(texts, scores)):
         if score < 0.4:
@@ -45,55 +90,118 @@ def parse(texts: list[str], scores: list[float]) -> dict:
             continue
 
         if en_section_prop:
-            if re.match(r"^[\(\[]?D[.\s]?\d", ligne, re.I) or re.match(r"^[\(\[]?E[.\s]", ligne, re.I):
+            d1_tronque_exit = (
+                re.match(r"^\(?\.?1[\)\.\s]", ligne, re.I)
+                and "MARQUE" in ligne_maj
+            )
+            sort_section = (
+                re.match(r"^[\(\[]?D[.\s]?\d", ligne, re.I)
+                or re.match(r"^[\(\[]?E[.\s]", ligne, re.I)
+                or d1_tronque_exit
+            )
+            if sort_section:
                 en_section_prop = False
                 _affecter_proprietaire(donnees, lignes_prop)
-                # continue vers les détecteurs de champs D.X ci-dessous
+                if d1_tronque_exit:
+                    dernier_label = "marque"
+                    continue
             else:
                 if ligne and not re.match(r"^\(", ligne) and not re.match(r"^ORIGINAL", ligne_maj):
                     lignes_prop.append(ligne)
                 continue
 
-        # Marque (champ D.1) : gère aussi ".1) Marque" (D tronqué par OCR)
+        # Marque (champ D.1) : gère ".1) Marque" (D tronqué) et "0 Marque" (D→0 OCR)
         d1_complet = re.match(r"^\(?D\.?1[\)\.\s]|^D\.?1[\.\s]?$|^D\.?1[\.\s]", ligne, re.I)
         d1_tronque = (not d1_complet) and re.match(r"^\(?\.?1[\)\.\s]", ligne, re.I) and "MARQUE" in ligne_maj
-        if donnees["marque"] is None and (d1_complet or d1_tronque):
-            valeur = re.sub(r"^\(?\.?D?\.?1[\)\.\s]*", "", ligne, flags=re.I).strip()
-            # Supprime le mot "Marque" s'il est le résidu du label
+        d1_zero = (not d1_complet) and (
+            re.match(r"^0[\.\s]*1[\)\.\s]", ligne, re.I)
+            or re.match(r"^0[\.\s]+Marque", ligne, re.I)
+        )
+        if donnees["marque"] is None and (d1_complet or d1_tronque or d1_zero):
+            if d1_zero:
+                valeur = re.sub(r"^0[\.\s]*1[\)\.\s]*|^0[\.\s]+Marque[\.\s]*", "", ligne, flags=re.I).strip()
+            else:
+                valeur = re.sub(r"^\(?\.?D?\.?1[\)\.\s]*", "", ligne, flags=re.I).strip()
             valeur = re.sub(r"^Marque\s*", "", valeur, flags=re.I).strip()
             if valeur and re.match(r"^[A-Z]{2,}", valeur) and not re.search(r"\d{5,}", valeur):
                 donnees["marque"] = valeur.split()[0]
+                if denomination_candidate and donnees["modele"] is None:
+                    donnees["modele"] = denomination_candidate
+                    denomination_candidate = None
+                    dernier_label = None
+                else:
+                    dernier_label = "modele"
             else:
                 dernier_label = "marque"
 
         # Modele (champ D.3)
         if donnees["modele"] is None and re.match(r"^\(?D\.?3[\)\.\s]|^D\.?3[\.\s]", ligne, re.I):
             valeur = re.sub(r"^\(?D\.?3[\)\.\s]*|^\(D\.3\)[^\w]*", "", ligne, flags=re.I).strip()
-            if valeur and re.match(r"^[A-Z]", valeur) and not re.search(r"\d{5,}", valeur):
-                donnees["modele"] = valeur
-            else:
+            # ^[A-Z]{2,} exige ≥2 majuscules consécutives — rejette "Dénomination..." (label OCR)
+            if valeur and re.match(r"^[A-Z]{2,}", valeur) and not re.search(r"\d{5,}", valeur):
+                if _est_candidat_modele(valeur):
+                    donnees["modele"] = valeur
+                    dernier_label = None
+                else:
+                    extrait = _extraire_modele_denomination(valeur)
+                    if extrait:
+                        donnees["modele"] = extrait
+                        dernier_label = None
+                    elif dernier_label != "marque":
+                        dernier_label = "modele"
+            elif dernier_label != "marque":
                 dernier_label = "modele"
 
-        # Puissance fiscale (champ P.6) : gère la fusion P.65 = 5 CV
+        # Puissance fiscale (champ P.6)
         if donnees["puissance_fiscale"] is None and re.match(r"^\(?P\.?6", ligne, re.I):
             match = re.search(r"P\.?6[\)\.\s]*(\d+)", ligne, re.I)
             if match and 1 <= int(match.group(1)) <= PF_MAX:
                 donnees["puissance_fiscale"] = int(match.group(1))
-            elif re.match(r"^\(?P\.?6(?:[\)\.\s]|$)", ligne, re.I):
+            else:
                 dernier_label = "puissance_fiscale"
 
+        # Fallback label P.6 tronqué (ex: ".6" au lieu de "(P.6)")
+        if donnees["puissance_fiscale"] is None and re.match(r"^\.6(?:[\.\s]|$)", ligne, re.I):
+            match = re.search(r"\.6[\.\s]*(\d+)", ligne, re.I)
+            if match and 1 <= int(match.group(1)) <= PF_MAX:
+                donnees["puissance_fiscale"] = int(match.group(1))
+            else:
+                dernier_label = "puissance_fiscale"
+
+        # Réinitialise le chainage modele si on passe aux champs post-D.3 (E, F, G).
+        # Condition : le label a du contenu textuel (minuscules) pour éviter les
+        # faux positifs sur les labels courts nus ("E.", "F.1" dans les CG normales).
+        if (dernier_label == "modele"
+                and re.match(r"^\(?[EFG][\.\s\)\d]", ligne, re.I)
+                and re.search(r"[a-z]{2,}", ligne)):
+            dernier_label = None
+
         # Résolution du label précédent sur la ligne suivante
+        # (les lignes commençant par "(" sont des labels → on les saute)
         if dernier_label and ligne and not re.match(r"^\(", ligne):
             if dernier_label == "marque":
                 if re.match(r"^[A-Z]{2,}$", ligne) and not re.match(r"^[A-Z0-9]{17}$", ligne):
                     donnees["marque"] = ligne
-                    dernier_label = "modele"
+                    if denomination_candidate and donnees["modele"] is None:
+                        donnees["modele"] = denomination_candidate
+                        denomination_candidate = None
+                        dernier_label = None
+                    else:
+                        dernier_label = "modele"
+                elif _est_denomination_candidate(ligne) and donnees["modele"] is None:
+                    # Dénomination D.3 avant marque D.1 (OCR 2 colonnes)
+                    denomination_candidate = ligne
             elif dernier_label == "modele":
-                # Accepte uniquement des majuscules pures sans chiffres, min 3 cars
-                # évite les VIN, codes type (DJFPE2MB), genres (VP, M1)
-                if re.match(r"^[A-Z ]{3,}$", ligne) and not re.search(r"\d", ligne):
+                if _est_candidat_modele(ligne):
                     donnees["modele"] = ligne.strip()
                     dernier_label = None
+                else:
+                    # Tentative d'extraction depuis une dénomination complexe
+                    # (ex: "NEW BERLINGO 1.6 HDI 92C" → "BERLINGO")
+                    extrait = _extraire_modele_denomination(ligne)
+                    if extrait:
+                        donnees["modele"] = extrait
+                        dernier_label = None
             elif dernier_label == "puissance_fiscale":
                 match = re.match(r"^(\d+)$", ligne)
                 if match and 1 <= int(match.group(1)) <= PF_MAX:
@@ -106,16 +214,23 @@ def parse(texts: list[str], scores: list[float]) -> dict:
             if match and 1 <= int(match.group(1)) <= PF_MAX:
                 donnees["puissance_fiscale"] = int(match.group(1))
 
-    # Affectation propriétaire si la boucle se termine dans la section
     if en_section_prop and lignes_prop:
         _affecter_proprietaire(donnees, lignes_prop)
+
+    for champ, cle_score in (("marque", "_score_marque"), ("modele", "_score_modele")):
+        valeur = donnees.get(champ)
+        if valeur:
+            valeur_maj = valeur.upper()
+            for t, s in zip(texts, scores):
+                if t.strip().upper() == valeur_maj:
+                    donnees[cle_score] = s
+                    break
 
     fix_marque_modele(donnees)
     return donnees
 
 
 def _affecter_proprietaire(donnees: dict, lignes: list[str]) -> None:
-    """Affecte nom et prénom du propriétaire depuis les lignes collectées."""
     lignes_propres = [lig.strip() for lig in lignes if lig.strip() and not re.match(r"^\(", lig.strip())]
     if not lignes_propres:
         return

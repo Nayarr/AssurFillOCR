@@ -87,6 +87,7 @@ for _marque, _modeles in _MODELES_BRUTS.items():
 
 # Puissance fiscale maximale admise sur une CG
 MAX_PF = 12
+PF_MAX = MAX_PF  # alias de compatibilité
 
 
 def marque_approx(chaine: str, seuil: float = 0.82) -> str | None:
@@ -111,6 +112,9 @@ def _ressemble_label(chaine: str) -> bool:
 
 def fix_marque_modele(donnees: dict) -> None:
     """Corrige marque/modele : normalisation, inversion, déduction, correction floue."""
+    score_marque = donnees.pop("_score_marque", 1.0)
+    donnees.pop("_score_modele", None)
+
     marque_brute = donnees.get("marque")
     modele_brut = donnees.get("modele")
 
@@ -160,11 +164,12 @@ def fix_marque_modele(donnees: dict) -> None:
             donnees["modele"] = marque_brute
 
     else:
-        # marque non reconnue : essaie de déduire depuis le modele
+        # marque non reconnue : déduit depuis le modele si possible
+        # La marque brute n'est pas dans le référentiel → l'inférence par modèle prime toujours
         mod = (donnees.get("modele") or "").upper()
         if mod:
             marque_inferee = _MODELE_VERS_MARQUE.get(mod)
-            if marque_inferee and donnees.get("marque") is None:
+            if marque_inferee:
                 donnees["marque"] = marque_inferee
 
     # Supprime le préfixe marque dans modele si la dénomination l'inclut (ex: "NISSAN QASHQAI")
@@ -178,7 +183,33 @@ def fix_marque_modele(donnees: dict) -> None:
 
     # Correction floue du modele contre la liste connue (ex: ARKAN→ARKANA)
     modele_a_corriger = donnees.get("modele")
-    if modele_a_corriger and len(modele_a_corriger) >= 4 and modele_a_corriger.upper() not in TOUS_MODELES:
+    if modele_a_corriger and len(modele_a_corriger) >= 3 and modele_a_corriger.upper() not in TOUS_MODELES:
         resultats = get_close_matches(modele_a_corriger.upper(), TOUS_MODELES, n=1, cutoff=0.82)
+        if not resultats:
+            # Correction des confusions OCR courantes (0→O, 1→I) avant de réessayer
+            corrected = modele_a_corriger.upper().replace("0", "O").replace("1", "I")
+            if corrected != modele_a_corriger.upper():
+                if corrected in TOUS_MODELES:
+                    resultats = [corrected]
+                else:
+                    resultats = get_close_matches(corrected, TOUS_MODELES, n=1, cutoff=0.82)
         if resultats:
             donnees["modele"] = resultats[0]
+
+    # Invalide le modele s'il n'appartient pas à la liste de référence
+    modele_a_valider = donnees.get("modele")
+    if modele_a_valider:
+        modele_maj = modele_a_valider.upper()
+        if modele_maj not in TOUS_MODELES:
+            # Valeur inconnue (ex: texte parasite "COUPON PEIACHABL") → on efface
+            donnees["modele"] = None
+        elif marque_finale and score_marque >= 0.75:
+            # Marque connue avec confiance : vérifie que le modele lui appartient
+            modeles_marque = {m.upper() for m in _MODELES_BRUTS.get(marque_finale, [])}
+            if modeles_marque and modele_maj not in modeles_marque:
+                donnees["modele"] = None
+
+    # Sécurité finale : efface toute marque absente du référentiel connu
+    marque_fin = donnees.get("marque")
+    if marque_fin and marque_approx(marque_fin) is None:
+        donnees["marque"] = None

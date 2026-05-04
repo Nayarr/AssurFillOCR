@@ -1,17 +1,48 @@
 import re
 from difflib import get_close_matches
 
-from .vehicle_ref import fix_marque_modele, PF_MAX, marque_approx, TOUS_MODELES
+from .vehicle_ref import fix_marque_modele, PF_MAX, marque_approx, TOUS_MODELES, MARQUES
 
 _PLAQUE_RE = re.compile(r"([A-Z]{2}-\d{3}-[A-Z]{2})")
 
-# Mots-clés indiquant que C.1 est une personne morale, pas physique
 _MOTS_CLES_SOCIETE = re.compile(
     r"\b(SAS|SARL|SA\b|SNC|EURL|SCO|SASU|LOCATION|LEASING|SERVICES?|"
     r"DISTRIBUTION|AUTO|GROUP|HOLDING|FLEET|RENTAL|ENCHERES|CARROSSERIE|"
     r"CONSTRUCTION|ENVIRONNEMENT|QUALICONSULT|SOCOTEC|RENAULT|DIAC|PEUGEOT)\b",
     re.IGNORECASE,
 )
+
+
+def _est_candidat_modele(ligne: str) -> bool:
+    """Vrai si la ligne peut être un nom de modèle."""
+    if not ligne or len(ligne) < 3 or len(ligne) > 20:
+        return False
+    if re.match(r"^[A-Z0-9]{17}$", ligne):
+        return False
+    if ligne.upper() in MARQUES:
+        return False
+    # Lettres + espaces + tirets (ex: CLIO, ARKANA, RIFTER ALLURE)
+    if re.match(r"^[A-Z][A-Z \-]{2,}$", ligne) and not re.search(r"\d", ligne):
+        return True
+    # Modèles numériques purs : seulement ceux connus dans la référence (ex: 208, 3008)
+    if re.match(r"^\d{3,4}$", ligne) and ligne.upper() in TOUS_MODELES:
+        return True
+    # Alphanum courts (ex: CL10→CLIO) — lettres puis 1-2 chiffres
+    if re.match(r"^[A-Z]{2,}\d{1,2}$", ligne) and len(ligne) <= 7:
+        return True
+    return False
+
+
+def _extraire_modele_denomination(denomination: str) -> str | None:
+    """Extrait un modèle connu depuis une dénomination commerciale complexe."""
+    mots = [m for m in denomination.upper().split() if len(m) >= 3]
+    for mot in mots:
+        if mot in TOUS_MODELES:
+            return mot
+        resultats = get_close_matches(mot, TOUS_MODELES, n=1, cutoff=0.88)
+        if resultats:
+            return resultats[0]
+    return None
 
 
 def parse(texts: list[str], scores: list[float]) -> dict:
@@ -43,7 +74,6 @@ def parse(texts: list[str], scores: list[float]) -> dict:
                 brut = match.group(1).upper()
                 plaque_mrz = brut[:2] + "-" + brut[2:5] + "-" + brut[5:]
                 vin_mrz = match.group(2).upper()
-                # MRZ plus fiable que le scan de champ OCR, toujours prioritaire
                 donnees["numero_immatriculation"] = plaque_mrz
                 if donnees["vin"] is None:
                     donnees["vin"] = vin_mrz
@@ -83,7 +113,7 @@ def parse(texts: list[str], scores: list[float]) -> dict:
             valeur = re.sub(r"^\(D\.1\)[^\w]*|^D\.?1[\.\s]*", "", ligne, flags=re.I).strip()
             if valeur and re.match(r"^[A-Z]", valeur) and not re.match(r"^\d", valeur):
                 donnees["marque"] = valeur
-                dernier_label = "modele"  # chaine : continue à chercher le modele
+                dernier_label = "modele"
             else:
                 dernier_label = "marque"
 
@@ -92,20 +122,44 @@ def parse(texts: list[str], scores: list[float]) -> dict:
             valeur = re.sub(r"^\(D\.3\)[^\w]*|^D\.?3[\.\s]*", "", ligne, flags=re.I).strip()
             if valeur and re.match(r"^[A-Z]", valeur) and not re.match(r"^\d", valeur):
                 donnees["modele"] = valeur
-                dernier_label = None  # valeur D.3 trouvée, arrête le chainage
+                dernier_label = None
             else:
                 dernier_label = "modele"
 
-        # Puissance fiscale (champ P.6) : gère la fusion P.65 = 5 CV
+        # Puissance fiscale (champ P.6)
         if donnees["puissance_fiscale"] is None and re.match(r"^P\.?6", ligne, re.I):
             match = re.search(r"P\.?6[\.\s]*(\d+)", ligne, re.I)
             if match and 1 <= int(match.group(1)) <= PF_MAX:
                 donnees["puissance_fiscale"] = int(match.group(1))
-            elif re.match(r"^P\.?6(?:[\.\s]|$)", ligne, re.I):
+            else:
                 dernier_label = "puissance_fiscale"
 
+        # Fallback label P.6 tronqué (ex: ".6" au lieu de "P.6")
+        if donnees["puissance_fiscale"] is None and re.match(r"^\.6(?:[\.\s]|$)", ligne, re.I):
+            match = re.search(r"\.6[\.\s]*(\d+)", ligne, re.I)
+            if match and 1 <= int(match.group(1)) <= PF_MAX:
+                donnees["puissance_fiscale"] = int(match.group(1))
+            else:
+                dernier_label = "puissance_fiscale"
+
+        # Réinitialise modele si on passe aux champs post-D.3 (E, F, G) avec contenu textuel
+        if (dernier_label == "modele"
+                and re.match(r"^\(?[EFG][\.\s\)\d]", ligne, re.I)
+                and re.search(r"[a-z]{2,}", ligne)):
+            dernier_label = None
+
+        # Réinitialise puissance_fiscale si on entre dans la section Y (taxes) — section finale
+        if dernier_label == "puissance_fiscale" and re.match(r"^\(?Y[\.\s\)\d]", ligne, re.I):
+            dernier_label = None
+
+        # est_label_champ : lignes qui sont clairement des labels de champ CG
+        # Inclut les patterns OCR comme Y.S (= Y.5), Y.G (= Y.6), X.A etc.
+        est_label_champ = bool(
+            re.match(r"^\(?[A-Z]\.?\d", ligne, re.I)
+            or re.match(r"^\(?[A-Z]\.[A-Z](?:[\.\s]|$)", ligne, re.I)
+        )
+
         # Résolution du label précédent sur la ligne suivante
-        est_label_champ = bool(re.match(r"^\(?[A-Z]\.?\d", ligne, re.I))
         if dernier_label and ligne and not est_label_champ:
             if dernier_label == "proprietaire":
                 if len(ligne) >= 2 and not re.match(r"^[A-Z]\d", ligne):
@@ -118,13 +172,16 @@ def parse(texts: list[str], scores: list[float]) -> dict:
             elif dernier_label == "marque":
                 if re.match(r"^[A-Z]{2,}", ligne) and not re.search(r"\d{4,}", ligne):
                     donnees["marque"] = ligne
-                    dernier_label = "modele"  # chaine
+                    dernier_label = "modele"
             elif dernier_label == "modele":
-                # Accepte uniquement des majuscules pures sans chiffres, min 3 cars
-                # évite les codes type (RJABE2MT6), VIN, labels de champs
-                if re.match(r"^[A-Z][A-Z \-]{2,}$", ligne) and not re.search(r"\d", ligne):
+                if _est_candidat_modele(ligne):
                     donnees["modele"] = ligne.strip()
                     dernier_label = None
+                else:
+                    extrait = _extraire_modele_denomination(ligne)
+                    if extrait:
+                        donnees["modele"] = extrait
+                        dernier_label = None
             elif dernier_label == "puissance_fiscale":
                 match = re.match(r"^(\d+)$", ligne)
                 if match and 1 <= int(match.group(1)) <= PF_MAX:
@@ -137,13 +194,39 @@ def parse(texts: list[str], scores: list[float]) -> dict:
             if match and 1 <= int(match.group(1)) <= PF_MAX:
                 donnees["puissance_fiscale"] = int(match.group(1))
 
+    # Fallback marque : si D.1 non détecté, cherche une marque connue dans les lignes à score élevé
+    if donnees["marque"] is None:
+        for texte, score in zip(texts, scores):
+            if score < 0.6:
+                continue
+            ligne = texte.strip()
+            if (len(ligne.split()) == 1
+                    and re.match(r"^[A-Z]{3,}$", ligne)
+                    and not re.match(r"^[A-Z]{2}-\d{3}-[A-Z]{2}$", ligne)
+                    and not re.match(r"^[A-Z0-9]{17}$", ligne)):
+                m = marque_approx(ligne, seuil=0.78)
+                if m:
+                    donnees["marque"] = m
+                    break
+
+    # Transmet les scores des champs marque/modèle pour permettre l'override
+    # basé sur la confiance relative (ex: ARKANA@0.99 > SNNIAREBA@0.66 → RENAULT)
+    for champ, cle_score in (("marque", "_score_marque"), ("modele", "_score_modele")):
+        valeur = donnees.get(champ)
+        if valeur:
+            valeur_maj = valeur.upper()
+            for t, s in zip(texts, scores):
+                if t.strip().upper() == valeur_maj:
+                    donnees[cle_score] = s
+                    break
+
     fix_marque_modele(donnees)
     return donnees
 
 
 def _parser_ligne_ci(ligne: str, donnees: dict) -> None:
     """Extrait marque et modele depuis la ligne MRZ CI<<."""
-    reste = ligne[4:]  # ignore "CI<<"
+    reste = ligne[4:]
     parties = [p for p in re.split(r"<{2,}", reste) if p]
     if not parties:
         return
@@ -154,25 +237,21 @@ def _parser_ligne_ci(ligne: str, donnees: dict) -> None:
     modele_mrz = None
     if len(parties) >= 2:
         denomination_brute = parties[1]
-        # le champ denomination peut contenir "MARQUE<MODELE" (< simple = espace)
         match = re.match(r"([A-Z<]+?)(\d{4})", denomination_brute)
         if match:
             str_modele = match.group(1).replace("<", " ").strip()
         else:
             str_modele = denomination_brute.replace("<", " ").strip()
-        # Supprime la marque si la denomination la répète (ex: "NISSAN QASHQAI")
         if marque_mrz_brute and str_modele.upper().startswith(marque_mrz_brute.upper()):
             str_modele = str_modele[len(marque_mrz_brute):].strip()
         if str_modele and len(str_modele) >= 2:
             modele_mrz = str_modele
 
-    # Correction floue du modele MRZ (ex: CLI0→CLIO, QASHQA→QASHQAI)
     if modele_mrz:
         resultats = get_close_matches(modele_mrz.upper(), TOUS_MODELES, n=1, cutoff=0.75)
         if resultats:
             modele_mrz = resultats[0]
 
-    # Valeurs MRZ en fallback uniquement, ne pas écraser ce qui est déjà trouvé
     if marque_mrz and donnees["marque"] is None:
         donnees["marque"] = marque_mrz
     if modele_mrz and donnees["modele"] is None:
@@ -190,6 +269,5 @@ def _affecter_proprietaire_c1(donnees: dict, valeur: str) -> None:
         donnees["proprietaire_nom"] = valeur
         donnees["proprietaire_prenom"] = None
     else:
-        # 2-3 mots : premier = NOM, reste = PRENOM
         donnees["proprietaire_nom"] = mots[0]
         donnees["proprietaire_prenom"] = " ".join(mots[1:])
