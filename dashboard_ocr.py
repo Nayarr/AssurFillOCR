@@ -1,5 +1,5 @@
 """
-Dashboard Streamlit — Analyse statistique des résultats OCR permis de conduire.
+Dashboard Streamlit — Analyse statistique des résultats OCR (permis de conduire + cartes grises).
 Lancer : streamlit run dashboard_ocr.py
 """
 
@@ -16,15 +16,38 @@ import streamlit as st
 
 OUTPUT_DIR = Path(__file__).parent / "output"
 
+# Tous les champs trackés dans les stats de null
 CHAMPS_PAR_TYPE = {
     "permis_dz_nouveau_recto": ["nom", "prenom", "date_naissance", "date_expiration", "numero_permis"],
     "permis_dz_nouveau_verso": ["nom", "prenom", "sexe", "date_naissance", "date_expiration", "numero_permis"],
     "permis_fr_nouveau_recto": ["nom", "prenom", "date_naissance", "date_expiration", "numero_permis"],
     "permis_fr_nouveau_verso": ["obtention_B"],
+    "cg_normale": ["numero_immatriculation", "vin", "proprietaire_nom", "proprietaire_prenom", "conducteur", "marque", "modele", "puissance_fiscale"],
+    "cg_provisoire": ["numero_immatriculation", "proprietaire_nom", "proprietaire_prenom", "marque", "modele", "puissance_fiscale"],
+}
+
+# Champs strictement requis pour qu'un document soit "utilisable"
+# Pour les CG : plaque + marque + modèle + puissance fiscale suffisent.
+# Le reste (VIN, propriétaire, conducteur) est du bonus pour la réconciliation future permis ↔ CG.
+CHAMPS_REQUIS_PAR_TYPE = {
+    **{k: v for k, v in CHAMPS_PAR_TYPE.items() if k not in ("cg_normale", "cg_provisoire")},
+    "cg_normale": ["numero_immatriculation", "marque", "modele", "puissance_fiscale"],
+    "cg_provisoire": ["numero_immatriculation", "marque", "modele", "puissance_fiscale"],
 }
 
 RECTO_TYPES = {"permis_dz_nouveau_recto", "permis_fr_nouveau_recto"}
 VERSO_TYPES = {"permis_dz_nouveau_verso", "permis_fr_nouveau_verso"}
+
+FAMILLE_PAR_TYPE = {
+    "permis_dz_nouveau_recto": "Permis",
+    "permis_dz_nouveau_verso": "Permis",
+    "permis_fr_nouveau_recto": "Permis",
+    "permis_fr_nouveau_verso": "Permis",
+    "cg_normale": "Carte grise",
+    "cg_provisoire": "Carte grise",
+}
+
+CG_TYPES = {"cg_normale", "cg_provisoire"}
 
 COLORS = px.colors.qualitative.Set2
 
@@ -103,12 +126,12 @@ def compute_frames(records):
             })
     df_type_null = pd.DataFrame(rows_type)
 
-    # ── 3. Utilisabilité (tous champs attendus non-null)
+    # ── 3. Utilisabilité (champs requis non-null — pour les CG, bonus exclus)
     usable_rows = []
     for r in structured:
         doc_type = r.get("type", "")
-        champs = CHAMPS_PAR_TYPE.get(doc_type, [])
-        manquants = [c for c in champs if is_null(r.get(c))]
+        champs_requis = CHAMPS_REQUIS_PAR_TYPE.get(doc_type, [])
+        manquants = [c for c in champs_requis if is_null(r.get(c))]
         usable_rows.append({
             "fichier": r["_fichier"],
             "type": doc_type,
@@ -131,12 +154,12 @@ def compute_frames(records):
             })
     df_scores = pd.DataFrame(score_rows)
 
-    # ── 5. Confiance vs null (corrélation score moyen ↔ champs null)
+    # ── 5. Confiance vs null (corrélation score moyen ↔ champs requis null)
     conf_rows = []
     for r in structured:
         doc_type = r.get("type", "")
-        champs = CHAMPS_PAR_TYPE.get(doc_type, [])
-        n_null = sum(1 for c in champs if is_null(r.get(c)))
+        champs_requis = CHAMPS_REQUIS_PAR_TYPE.get(doc_type, [])
+        n_null = sum(1 for c in champs_requis if is_null(r.get(c)))
         conf_rows.append({
             "fichier": r["_fichier"],
             "type": doc_type,
@@ -186,7 +209,11 @@ def compute_frames(records):
         texts = r.get("textes_bruts", [])
         text_join = " ".join(texts).upper()
         hint = "—"
-        if any(k in text_join for k in ["REPUBLIQUE ALGER", "DZ", "ALGERIE"]):
+        if "CRFRA" in text_join or "CERTIFICAT D'IMMATRICULATION" in text_join or "IMMATRICUL" in text_join:
+            hint = "Probablement carte grise FR"
+        elif any(k in text_join for k in ["WW-", "CERTIFICAT PROVISOIRE"]):
+            hint = "Probablement CG provisoire"
+        elif any(k in text_join for k in ["REPUBLIQUE ALGER", "DZ", "ALGERIE"]):
             hint = "Probablement permis DZ"
         elif "REPUBLIQUE FRANCAISE" in text_join or "PREFET" in text_join:
             hint = "Probablement permis FR"
@@ -203,7 +230,31 @@ def compute_frames(records):
         })
     df_inconnus = pd.DataFrame(inconnu_rows)
 
-    return df_null, df_type_null, df_usable, df_scores, df_conf, df_pairs, df_inconnus
+    # ── 8. Statistiques cartes grises
+    df_cg = _compute_cg_frame(records)
+
+    return df_null, df_type_null, df_usable, df_scores, df_conf, df_pairs, df_inconnus, df_cg
+
+
+def _compute_cg_frame(records):
+    rows = []
+    for r in records:
+        if r.get("type") not in CG_TYPES:
+            continue
+        rows.append({
+            "fichier": r["_fichier"],
+            "type": r.get("type"),
+            "numero_immatriculation": r.get("numero_immatriculation"),
+            "vin": r.get("vin"),
+            "proprietaire_nom": r.get("proprietaire_nom"),
+            "proprietaire_prenom": r.get("proprietaire_prenom"),
+            "conducteur": r.get("conducteur"),
+            "marque": r.get("marque"),
+            "modele": r.get("modele"),
+            "puissance_fiscale": r.get("puissance_fiscale"),
+            "score_moyen": r.get("_score_mean"),
+        })
+    return pd.DataFrame(rows)
 
 
 def _build_pairs_df(pairs):
@@ -229,25 +280,38 @@ def page_overview(records):
     total = len(records)
     structured = [r for r in records if r.get("type") != "inconnu"]
     inconnus = [r for r in records if r.get("type") == "inconnu"]
+    permis = [r for r in structured if r.get("type") not in CG_TYPES]
+    cartes_grises = [r for r in structured if r.get("type") in CG_TYPES]
 
-    c1, c2, c3 = st.columns(3)
+    c1, c2, c3, c4, c5 = st.columns(5)
     c1.metric("Documents analysés", total)
     c2.metric("Documents structurés", len(structured))
-    c3.metric("Documents inconnus", len(inconnus), delta=f"{len(inconnus)/total*100:.0f}%", delta_color="inverse")
+    c3.metric("Permis", len(permis))
+    c4.metric("Cartes grises", len(cartes_grises))
+    c5.metric("Inconnus", len(inconnus), delta=f"{len(inconnus)/total*100:.0f}%", delta_color="inverse")
+
+    # Répartition famille
+    famille_counts = defaultdict(int)
+    for r in records:
+        doc_type = r.get("type", "inconnu")
+        famille = FAMILLE_PAR_TYPE.get(doc_type, "Inconnu")
+        famille_counts[famille] += 1
+    df_famille = pd.DataFrame([{"famille": k, "count": v} for k, v in famille_counts.items()])
+
+    col_f1, col_f2 = st.columns(2)
+    with col_f1:
+        fig_f = px.pie(df_famille, names="famille", values="count",
+                       title="Répartition par famille de document",
+                       color_discrete_sequence=COLORS)
+        fig_f.update_traces(textposition="inside", textinfo="percent+label")
+        st.plotly_chart(fig_f, use_container_width=True)
 
     type_counts = defaultdict(int)
     for r in records:
         type_counts[r.get("type", "inconnu")] += 1
     df_types = pd.DataFrame([{"type": k, "count": v} for k, v in type_counts.items()])
 
-    col1, col2 = st.columns(2)
-    with col1:
-        fig = px.pie(df_types, names="type", values="count", title="Répartition par type",
-                     color_discrete_sequence=COLORS)
-        fig.update_traces(textposition="inside", textinfo="percent+label")
-        st.plotly_chart(fig, use_container_width=True)
-
-    with col2:
+    with col_f2:
         fig2 = px.bar(df_types.sort_values("count", ascending=True),
                       x="count", y="type", orientation="h",
                       title="Nombre de documents par type",
@@ -532,27 +596,135 @@ def page_recto_verso(df_pairs):
         st.dataframe(pd.DataFrame(rows_display), use_container_width=True, hide_index=True)
 
 
+def page_cartes_grises(df_cg):
+    st.header("Analyse des cartes grises")
+
+    if df_cg.empty:
+        st.info("Aucune carte grise trouvée dans les données.")
+        return
+
+    total = len(df_cg)
+    n_normale = int((df_cg["type"] == "cg_normale").sum())
+    n_provisoire = int((df_cg["type"] == "cg_provisoire").sum())
+    n_avec_vin = int(df_cg["vin"].notna().sum())
+
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Total cartes grises", total)
+    c2.metric("CG définitives", n_normale)
+    c3.metric("CG provisoires (WW)", n_provisoire)
+    c4.metric("Avec VIN renseigné", n_avec_vin)
+
+    col1, col2 = st.columns(2)
+    with col1:
+        fig_type = px.pie(
+            values=[n_normale, n_provisoire],
+            names=["CG définitive", "CG provisoire (WW)"],
+            color_discrete_sequence=["#636EFA", "#EF553B"],
+            title="Répartition CG définitives / provisoires",
+        )
+        fig_type.update_traces(textposition="inside", textinfo="percent+label")
+        st.plotly_chart(fig_type, use_container_width=True)
+
+    with col2:
+        marque_counts = df_cg["marque"].dropna().value_counts().reset_index()
+        marque_counts.columns = ["marque", "count"]
+        fig_marque = px.bar(
+            marque_counts.head(15),
+            x="count", y="marque", orientation="h",
+            title="Top marques (cartes grises)",
+            color="count", color_continuous_scale=["#c7e9fb", "#1f77b4"],
+        )
+        fig_marque.update_coloraxes(showscale=False)
+        fig_marque.update_layout(yaxis={"categoryorder": "total ascending"})
+        st.plotly_chart(fig_marque, use_container_width=True)
+
+    col3, col4 = st.columns(2)
+    with col3:
+        modele_counts = df_cg["modele"].dropna().value_counts().reset_index()
+        modele_counts.columns = ["modele", "count"]
+        fig_modele = px.bar(
+            modele_counts.head(15),
+            x="count", y="modele", orientation="h",
+            title="Top modèles (cartes grises)",
+            color="count", color_continuous_scale=["#d4f1d4", "#2ca02c"],
+        )
+        fig_modele.update_coloraxes(showscale=False)
+        fig_modele.update_layout(yaxis={"categoryorder": "total ascending"})
+        st.plotly_chart(fig_modele, use_container_width=True)
+
+    with col4:
+        pf_df = df_cg["puissance_fiscale"].dropna().astype(int)
+        if not pf_df.empty:
+            fig_pf = px.histogram(
+                pf_df, nbins=20,
+                title="Distribution des puissances fiscales (CV)",
+                labels={"value": "Puissance fiscale (CV)", "count": "Nombre"},
+                color_discrete_sequence=["#FFA15A"],
+            )
+            fig_pf.update_layout(bargap=0.1)
+            st.plotly_chart(fig_pf, use_container_width=True)
+
+    st.subheader("Taux de remplissage des champs")
+    fill_rows = []
+    for col_name in ["numero_immatriculation", "vin", "proprietaire_nom", "proprietaire_prenom",
+                     "marque", "modele", "puissance_fiscale"]:
+        total_possible = len(df_cg) if col_name != "vin" else n_normale
+        n_rempli = int(df_cg[col_name].notna().sum())
+        pct = n_rempli / total_possible * 100 if total_possible else 0
+        fill_rows.append({"champ": col_name, "rempli": n_rempli, "total": total_possible, "pct_rempli": round(pct, 1)})
+    df_fill = pd.DataFrame(fill_rows)
+    fig_fill = px.bar(
+        df_fill, x="champ", y="pct_rempli", text="pct_rempli",
+        color="pct_rempli",
+        color_continuous_scale=["#EF553B", "#FFA15A", "#00CC96"],
+        labels={"pct_rempli": "% rempli", "champ": "Champ"},
+        title="Taux de remplissage par champ (cartes grises)",
+    )
+    fig_fill.update_traces(texttemplate="%{text}%", textposition="outside")
+    fig_fill.update_coloraxes(showscale=False)
+    fig_fill.update_layout(yaxis_range=[0, 110])
+    st.plotly_chart(fig_fill, use_container_width=True)
+
+    st.subheader("Tableau des cartes grises")
+    display_cols = ["fichier", "type", "numero_immatriculation", "vin", "proprietaire_nom",
+                    "proprietaire_prenom", "marque", "modele", "puissance_fiscale"]
+    rename_map = {
+        "fichier": "Fichier", "type": "Type",
+        "numero_immatriculation": "Immatriculation", "vin": "VIN",
+        "proprietaire_nom": "Propriétaire (nom)", "proprietaire_prenom": "Propriétaire (prénom)",
+        "marque": "Marque", "modele": "Modèle", "puissance_fiscale": "CV fiscaux",
+    }
+    st.dataframe(
+        df_cg[display_cols].rename(columns=rename_map),
+        use_container_width=True, hide_index=True,
+    )
+
+
 # ─── Main ─────────────────────────────────────────────────────────────────────
 
 def main():
     st.set_page_config(
-        page_title="Dashboard OCR Permis",
+        page_title="Dashboard OCR — Permis & Cartes grises",
         page_icon="🪪",
         layout="wide",
     )
-    st.title("🪪 Dashboard OCR — Permis de conduire")
+    st.title("🪪 Dashboard OCR — Permis de conduire & Cartes grises")
     st.caption(f"Dossier analysé : `{OUTPUT_DIR}`")
 
     records = load_data()
-    df_null, df_type_null, df_usable, df_scores, df_conf, df_pairs, df_inconnus = compute_frames(records)
+    df_null, df_type_null, df_usable, df_scores, df_conf, df_pairs, df_inconnus, df_cg = compute_frames(records)
+
+    n_permis = sum(1 for r in records if r.get("type") not in CG_TYPES and r.get("type") != "inconnu")
+    n_cg = sum(1 for r in records if r.get("type") in CG_TYPES)
 
     pages = {
         "Vue d'ensemble": lambda: page_overview(records),
+        f"Cartes grises ({n_cg})": lambda: page_cartes_grises(df_cg),
         "Champs null": lambda: page_null_fields(df_null, df_type_null),
         "Utilisabilité": lambda: page_usability(df_usable),
         "Scores OCR": lambda: page_ocr_confidence(df_scores, df_conf),
         "Documents inconnus": lambda: page_inconnus(df_inconnus),
-        "Cohérence recto/verso": lambda: page_recto_verso(df_pairs),
+        f"Cohérence recto/verso ({n_permis} permis)": lambda: page_recto_verso(df_pairs),
     }
 
     with st.sidebar:
@@ -561,7 +733,7 @@ def main():
         st.divider()
         if st.button("🔄 Rafraîchir les données"):
             st.rerun()
-        st.caption(f"{len(records)} fichiers chargés")
+        st.caption(f"{len(records)} fichiers chargés ({n_permis} permis · {n_cg} CG)")
 
     pages[choice]()
 
