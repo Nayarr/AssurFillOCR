@@ -208,7 +208,18 @@ def construire_profil(
     type_cg_label = "normale" if "normale" in cg_type else "provisoire"
     profil_type = f"permis_{pays}_cg_{type_cg_label}"
 
-    # 5. Assemblage final
+    # 5. Détection de mauvaise paire recto/verso (DZ uniquement)
+    # Si nom ET prénom sont tous les deux des conflits majeurs entre recto et verso,
+    # les deux documents viennent probablement de personnes différentes.
+    paire_suspecte = False
+    if pays == "dz":
+        champs_majeurs_internes = {
+            c["champ"] for c in conflits
+            if c.get("source") == "interne_permis" and c.get("type") == "majeur"
+        }
+        paire_suspecte = "nom" in champs_majeurs_internes and "prenom" in champs_majeurs_internes
+
+    # 6. Assemblage final
     return {
         "profil_type": profil_type,
 
@@ -239,4 +250,5 @@ def construire_profil(
 
         # Audit des conflits détectés
         "_conflits": conflits,
+        "_paire_suspecte": paire_suspecte,
     }
