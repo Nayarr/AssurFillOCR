@@ -1,5 +1,5 @@
 """
-Dashboard Streamlit — Analyse statistique des résultats OCR (permis de conduire + cartes grises).
+Dashboard Streamlit — Analyse statistique des résultats OCR (permis de conduire + cartes grises + profils unifiés).
 Lancer : streamlit run dashboard_ocr.py
 """
 
@@ -51,6 +51,21 @@ CG_TYPES = {"cg_normale", "cg_provisoire"}
 
 COLORS = px.colors.qualitative.Set2
 
+# Champs présents dans un profil unifié
+CHAMPS_PROFIL = [
+    "nom", "prenom", "date_naissance", "sexe",
+    "numero_permis", "pays_permis", "date_expiration_permis", "obtention_B",
+    "numero_immatriculation", "vin", "marque", "modele", "puissance_fiscale",
+    "proprietaire_nom", "proprietaire_prenom", "conducteur",
+]
+
+# Champs indispensables pour qu'un profil soit "utilisable" en assurance
+CHAMPS_REQUIS_PROFIL = [
+    "nom", "prenom", "date_naissance",
+    "numero_permis", "date_expiration_permis",
+    "numero_immatriculation", "marque", "modele",
+]
+
 # ─── Data loading ─────────────────────────────────────────────────────────────
 
 def load_data():
@@ -82,6 +97,16 @@ def load_data():
     return records
 
 
+def load_profiles():
+    profiles = []
+    for path in sorted(OUTPUT_DIR.glob("*/*_profil.json")):
+        profil = json.loads(path.read_text(encoding="utf-8"))
+        profil["_dossier"] = path.parent.name
+        profil["_fichier"] = path.name
+        profiles.append(profil)
+    return profiles
+
+
 def is_null(value) -> bool:
     if value is None:
         return True
@@ -110,7 +135,8 @@ def compute_frames(records):
     for champ, s in champ_stats.items():
         pct = s["null"] / s["total"] * 100 if s["total"] else 0
         null_rows.append({"champ": champ, "null": s["null"], "total": s["total"], "pct_null": round(pct, 1)})
-    df_null = pd.DataFrame(null_rows).sort_values("pct_null", ascending=False)
+    df_null_raw = pd.DataFrame(null_rows)
+    df_null = df_null_raw.sort_values("pct_null", ascending=False) if not df_null_raw.empty else df_null_raw
 
     # ── 2. Null par type × attribut
     rows_type = []
@@ -167,7 +193,8 @@ def compute_frames(records):
             "n_null": n_null,
             "utilisable": n_null == 0,
         })
-    df_conf = pd.DataFrame(conf_rows).dropna(subset=["score_moyen"])
+    df_conf_raw = pd.DataFrame(conf_rows)
+    df_conf = df_conf_raw.dropna(subset=["score_moyen"]) if not df_conf_raw.empty else df_conf_raw
 
     # ── 6. Recto / verso : appariement par numéro consécutif
     # On suppose que les fichiers sont nommés de façon ordonnée et que
@@ -272,10 +299,63 @@ def _build_pairs_df(pairs):
     return pd.DataFrame(rows) if rows else pd.DataFrame()
 
 
+def compute_profile_frames(profiles):
+    if not profiles:
+        return pd.DataFrame(), pd.DataFrame()
+
+    profil_rows = []
+    conflit_rows = []
+
+    for p in profiles:
+        pt = p.get("profil_type", "inconnu")
+        pays = "FR" if "fr" in pt else ("DZ" if "dz" in pt else "?")
+        type_cg = "normale" if "normale" in pt else ("provisoire" if "provisoire" in pt else "?")
+
+        conflits = p.get("_conflits", []) or []
+        n_conflits = len(conflits)
+        n_majeur = sum(1 for c in conflits if c.get("type") == "majeur")
+
+        manquants = [c for c in CHAMPS_REQUIS_PROFIL if is_null(p.get(c))]
+        utilisable = len(manquants) == 0
+
+        row = {
+            "_dossier": p["_dossier"],
+            "_fichier": p["_fichier"],
+            "profil_type": pt,
+            "pays": pays,
+            "type_cg": type_cg,
+            "n_conflits": n_conflits,
+            "n_conflits_majeur": n_majeur,
+            "utilisable": utilisable,
+            "champs_manquants": ", ".join(manquants) if manquants else "—",
+        }
+        for champ in CHAMPS_PROFIL:
+            row[champ] = p.get(champ)
+        profil_rows.append(row)
+
+        for c in conflits:
+            conflit_rows.append({
+                "_dossier": p["_dossier"],
+                "profil_type": pt,
+                "pays": pays,
+                "champ": c.get("champ"),
+                "type_conflit": c.get("type"),
+                "source": c.get("source", "?"),
+                "similitude": c.get("similitude"),
+                "decision": c.get("decision"),
+            })
+
+    return pd.DataFrame(profil_rows), pd.DataFrame(conflit_rows)
+
+
 # ─── Page renderers ───────────────────────────────────────────────────────────
 
 def page_overview(records):
     st.header("Vue d'ensemble")
+
+    if not records:
+        st.info("Aucun document individuel trouvé (pas de fichiers `*_parsed.json` dans `output/`). Utilisez les pages **Profils** pour analyser les résultats.")
+        return
 
     total = len(records)
     structured = [r for r in records if r.get("type") != "inconnu"]
@@ -288,7 +368,9 @@ def page_overview(records):
     c2.metric("Documents structurés", len(structured))
     c3.metric("Permis", len(permis))
     c4.metric("Cartes grises", len(cartes_grises))
-    c5.metric("Inconnus", len(inconnus), delta=f"{len(inconnus)/total*100:.0f}%", delta_color="inverse")
+    c5.metric("Inconnus", len(inconnus),
+              delta=f"{len(inconnus)/total*100:.0f}%" if total else "—",
+              delta_color="inverse")
 
     # Répartition famille
     famille_counts = defaultdict(int)
@@ -700,25 +782,280 @@ def page_cartes_grises(df_cg):
     )
 
 
+def page_profiles_overview(profiles, df_profils, df_conflits):
+    st.header("Profils unifiés — Vue d'ensemble")
+    st.caption("Un profil = recto + verso permis + carte grise fusionnés en un seul dict.")
+
+    if df_profils.empty:
+        st.info("Aucun profil trouvé dans le dossier output/.")
+        return
+
+    total = len(df_profils)
+    n_fr = int((df_profils["pays"] == "FR").sum())
+    n_dz = int((df_profils["pays"] == "DZ").sum())
+    n_utilisable = int(df_profils["utilisable"].sum())
+    n_avec_conflits = int((df_profils["n_conflits"] > 0).sum())
+
+    c1, c2, c3, c4, c5 = st.columns(5)
+    c1.metric("Profils générés", total)
+    c2.metric("Permis FR", n_fr)
+    c3.metric("Permis DZ", n_dz)
+    c4.metric("Profils utilisables", f"{n_utilisable}/{total}")
+    c5.metric("Avec conflits", n_avec_conflits,
+              delta=f"{n_avec_conflits/total*100:.0f}%", delta_color="inverse")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        type_counts = df_profils["profil_type"].value_counts().reset_index()
+        type_counts.columns = ["profil_type", "count"]
+        fig = px.pie(type_counts, names="profil_type", values="count",
+                     title="Répartition par type de profil",
+                     color_discrete_sequence=COLORS)
+        fig.update_traces(textposition="inside", textinfo="percent+label")
+        st.plotly_chart(fig, use_container_width=True)
+
+    with col2:
+        ok_counts = df_profils.groupby("profil_type")["utilisable"].agg(["sum", "count"]).reset_index()
+        ok_counts["pct"] = (ok_counts["sum"] / ok_counts["count"] * 100).round(1)
+        fig2 = px.bar(ok_counts, x="profil_type", y="pct", text="pct",
+                      color="pct", color_continuous_scale=["#EF553B", "#FFA15A", "#00CC96"],
+                      title="% de profils utilisables par type",
+                      labels={"profil_type": "Type", "pct": "% utilisable"})
+        fig2.update_traces(texttemplate="%{text}%", textposition="outside")
+        fig2.update_coloraxes(showscale=False)
+        fig2.update_layout(yaxis_range=[0, 110])
+        st.plotly_chart(fig2, use_container_width=True)
+
+    st.subheader("Taux de null par champ (tous profils)")
+    null_rows = []
+    for champ in CHAMPS_PROFIL:
+        total_champ = len(df_profils)
+        n_null = int(df_profils[champ].isna().sum())
+        null_rows.append({
+            "champ": champ,
+            "null": n_null,
+            "total": total_champ,
+            "pct_null": round(n_null / total_champ * 100, 1),
+            "requis": champ in CHAMPS_REQUIS_PROFIL,
+        })
+    df_null_profil = pd.DataFrame(null_rows).sort_values("pct_null", ascending=False)
+
+    fig3 = px.bar(df_null_profil, x="champ", y="pct_null", text="pct_null",
+                  color="pct_null", color_continuous_scale=["#00CC96", "#FFA15A", "#EF553B"],
+                  pattern_shape="requis", pattern_shape_map={True: "", False: "/"},
+                  labels={"pct_null": "% null", "champ": "Champ", "requis": "Requis"},
+                  title="% de valeurs null par champ de profil (hachuré = optionnel)")
+    fig3.update_traces(texttemplate="%{text}%", textposition="outside")
+    fig3.update_coloraxes(showscale=False)
+    fig3.update_layout(yaxis_range=[0, 110])
+    st.plotly_chart(fig3, use_container_width=True)
+
+    st.subheader("Profils incomplets")
+    incomplets = df_profils[~df_profils["utilisable"]][
+        ["_dossier", "profil_type", "champs_manquants"]
+    ].rename(columns={"_dossier": "Dossier", "profil_type": "Type", "champs_manquants": "Champs manquants"})
+    if incomplets.empty:
+        st.success("Tous les profils sont utilisables !")
+    else:
+        st.dataframe(incomplets, use_container_width=True, hide_index=True)
+
+
+def page_profiles_conflicts(df_conflits, df_profils):
+    st.header("Conflits de fusion des profils")
+    st.caption(
+        "Un conflit est détecté quand deux sources donnent des valeurs différentes pour le même champ. "
+        "**Majeur** : divergence forte (ratio < 0.80). **Mineur** : léger écart OCR. **Date divergente** : dates incohérentes entre sources."
+    )
+
+    if df_conflits.empty:
+        st.success("Aucun conflit détecté dans les profils.")
+        return
+
+    total_conflits = len(df_conflits)
+    n_majeur = int((df_conflits["type_conflit"] == "majeur").sum())
+    n_mineur = int((df_conflits["type_conflit"] == "mineur").sum())
+    n_date = int((df_conflits["type_conflit"] == "date_divergente").sum())
+    n_profils_touches = df_conflits["_dossier"].nunique()
+
+    c1, c2, c3, c4, c5 = st.columns(5)
+    c1.metric("Total conflits", total_conflits)
+    c2.metric("Conflits majeurs", n_majeur)
+    c3.metric("Conflits mineurs", n_mineur)
+    c4.metric("Dates divergentes", n_date)
+    c5.metric("Profils touchés", n_profils_touches)
+
+    col1, col2 = st.columns(2)
+    with col1:
+        type_counts = df_conflits["type_conflit"].value_counts().reset_index()
+        type_counts.columns = ["type_conflit", "count"]
+        fig = px.pie(type_counts, names="type_conflit", values="count",
+                     title="Répartition par type de conflit",
+                     color_discrete_sequence=["#EF553B", "#FFA15A", "#636EFA"])
+        fig.update_traces(textposition="inside", textinfo="percent+label")
+        st.plotly_chart(fig, use_container_width=True)
+
+    with col2:
+        src_counts = df_conflits["source"].value_counts().reset_index()
+        src_counts.columns = ["source", "count"]
+        fig2 = px.bar(src_counts, x="source", y="count", text="count",
+                      color="source", color_discrete_sequence=COLORS,
+                      title="Conflits par source",
+                      labels={"source": "Source", "count": "Nb conflits"})
+        fig2.update_layout(showlegend=False)
+        st.plotly_chart(fig2, use_container_width=True)
+
+    st.subheader("Champs les plus conflictuels")
+    champ_counts = df_conflits.groupby(["champ", "type_conflit"]).size().reset_index(name="count")
+    fig3 = px.bar(champ_counts, x="champ", y="count", color="type_conflit",
+                  barmode="stack",
+                  color_discrete_map={"majeur": "#EF553B", "mineur": "#FFA15A", "date_divergente": "#636EFA"},
+                  title="Nombre de conflits par champ",
+                  labels={"champ": "Champ", "count": "Nb conflits", "type_conflit": "Type"})
+    st.plotly_chart(fig3, use_container_width=True)
+
+    st.subheader("Conflits par type de profil")
+    if not df_conflits.empty and not df_profils.empty:
+        conflits_par_profil = df_conflits.groupby(["_dossier", "profil_type"]).size().reset_index(name="n_conflits")
+        fig4 = px.box(conflits_par_profil, x="profil_type", y="n_conflits",
+                      color="profil_type", color_discrete_sequence=COLORS,
+                      title="Distribution du nombre de conflits par profil",
+                      labels={"profil_type": "Type de profil", "n_conflits": "Nb conflits"})
+        fig4.update_layout(showlegend=False)
+        st.plotly_chart(fig4, use_container_width=True)
+
+    st.subheader("Distribution de la similitude (conflits texte)")
+    sim_df = df_conflits.dropna(subset=["similitude"])
+    if not sim_df.empty:
+        fig5 = px.histogram(sim_df, x="similitude", color="type_conflit", nbins=20,
+                            barmode="overlay",
+                            color_discrete_map={"majeur": "#EF553B", "mineur": "#FFA15A"},
+                            title="Distribution du ratio de similitude",
+                            labels={"similitude": "Ratio de similitude", "type_conflit": "Type"})
+        fig5.add_vline(x=0.80, line_dash="dash", line_color="gray",
+                       annotation_text="Seuil 0.80", annotation_position="top right")
+        st.plotly_chart(fig5, use_container_width=True)
+
+    st.subheader("Détail des conflits")
+    display = df_conflits[["_dossier", "profil_type", "champ", "type_conflit", "source", "similitude", "decision"]].rename(columns={
+        "_dossier": "Dossier", "profil_type": "Type", "champ": "Champ",
+        "type_conflit": "Type conflit", "source": "Source",
+        "similitude": "Similitude", "decision": "Décision retenue",
+    })
+    st.dataframe(display, use_container_width=True, hide_index=True)
+
+
+def page_profiles_browser(df_profils):
+    st.header("Explorateur de profils")
+
+    if df_profils.empty:
+        st.info("Aucun profil disponible.")
+        return
+
+    col_f1, col_f2, col_f3 = st.columns(3)
+    with col_f1:
+        types = ["Tous"] + sorted(df_profils["profil_type"].unique().tolist())
+        filtre_type = st.selectbox("Type de profil", types)
+    with col_f2:
+        filtre_utilisable = st.selectbox("Utilisabilité", ["Tous", "Utilisables", "Incomplets"])
+    with col_f3:
+        filtre_conflits = st.selectbox("Conflits", ["Tous", "Avec conflits", "Sans conflit"])
+
+    df = df_profils.copy()
+    if filtre_type != "Tous":
+        df = df[df["profil_type"] == filtre_type]
+    if filtre_utilisable == "Utilisables":
+        df = df[df["utilisable"]]
+    elif filtre_utilisable == "Incomplets":
+        df = df[~df["utilisable"]]
+    if filtre_conflits == "Avec conflits":
+        df = df[df["n_conflits"] > 0]
+    elif filtre_conflits == "Sans conflit":
+        df = df[df["n_conflits"] == 0]
+
+    st.caption(f"{len(df)} profil(s) affiché(s)")
+
+    display_cols = [
+        "_dossier", "profil_type", "nom", "prenom", "date_naissance",
+        "numero_permis", "pays_permis", "date_expiration_permis",
+        "numero_immatriculation", "marque", "modele", "type_cg",
+        "n_conflits", "utilisable",
+    ]
+    rename_map = {
+        "_dossier": "Dossier", "profil_type": "Type", "nom": "Nom", "prenom": "Prénom",
+        "date_naissance": "Naissance", "numero_permis": "N° permis",
+        "pays_permis": "Pays", "date_expiration_permis": "Expiration permis",
+        "numero_immatriculation": "Immatriculation", "marque": "Marque",
+        "modele": "Modèle", "type_cg": "CG", "n_conflits": "Conflits", "utilisable": "✓",
+    }
+    st.dataframe(
+        df[display_cols].rename(columns=rename_map),
+        use_container_width=True, hide_index=True,
+    )
+
+    st.subheader("Détail d'un profil")
+    dossier_sel = st.selectbox("Choisir un dossier", df["_dossier"].tolist())
+    if dossier_sel:
+        row = df[df["_dossier"] == dossier_sel].iloc[0]
+        col_a, col_b, col_c = st.columns(3)
+
+        with col_a:
+            st.markdown("**Identité**")
+            st.write(f"Nom : {row['nom'] or '—'}")
+            st.write(f"Prénom : {row['prenom'] or '—'}")
+            st.write(f"Naissance : {row['date_naissance'] or '—'}")
+            st.write(f"Sexe : {row['sexe'] or '—'}")
+
+        with col_b:
+            st.markdown("**Permis**")
+            st.write(f"N° : {row['numero_permis'] or '—'}")
+            st.write(f"Pays : {row['pays_permis'] or '—'}")
+            st.write(f"Expiration : {row['date_expiration_permis'] or '—'}")
+            st.write(f"Obtention B : {row['obtention_B'] or '—'}")
+
+        with col_c:
+            st.markdown("**Véhicule**")
+            st.write(f"Immat. : {row['numero_immatriculation'] or '—'}")
+            st.write(f"VIN : {row['vin'] or '—'}")
+            st.write(f"Marque : {row['marque'] or '—'}")
+            st.write(f"Modèle : {row['modele'] or '—'}")
+            st.write(f"CV fiscaux : {row['puissance_fiscale'] or '—'}")
+            st.write(f"Type CG : {row['type_cg'] or '—'}")
+
+        if row["n_conflits"] > 0:
+            st.markdown(f"**{row['n_conflits']} conflit(s) détecté(s)**")
+            profil_path = OUTPUT_DIR / dossier_sel / row["_fichier"]
+            raw = json.loads(profil_path.read_text(encoding="utf-8"))
+            for c in raw.get("_conflits", []):
+                badge = "🔴" if c.get("type") == "majeur" else ("🟡" if c.get("type") == "mineur" else "🔵")
+                st.write(f"{badge} **{c.get('champ')}** — {c.get('type')} | décision : `{c.get('decision')}` | sim : {c.get('similitude', '—')}")
+
+
 # ─── Main ─────────────────────────────────────────────────────────────────────
 
 def main():
     st.set_page_config(
-        page_title="Dashboard OCR — Permis & Cartes grises",
+        page_title="Dashboard OCR — Permis, CG & Profils",
         page_icon="🪪",
         layout="wide",
     )
-    st.title("🪪 Dashboard OCR — Permis de conduire & Cartes grises")
+    st.title("🪪 Dashboard OCR — Permis de conduire, Cartes grises & Profils")
     st.caption(f"Dossier analysé : `{OUTPUT_DIR}`")
 
     records = load_data()
     df_null, df_type_null, df_usable, df_scores, df_conf, df_pairs, df_inconnus, df_cg = compute_frames(records)
 
+    profiles = load_profiles()
+    df_profils, df_conflits = compute_profile_frames(profiles)
+
     n_permis = sum(1 for r in records if r.get("type") not in CG_TYPES and r.get("type") != "inconnu")
     n_cg = sum(1 for r in records if r.get("type") in CG_TYPES)
+    n_profils = len(profiles)
 
     pages = {
         "Vue d'ensemble": lambda: page_overview(records),
+        f"Profils ({n_profils})": lambda: page_profiles_overview(profiles, df_profils, df_conflits),
+        f"Conflits de fusion": lambda: page_profiles_conflicts(df_conflits, df_profils),
+        f"Explorateur de profils": lambda: page_profiles_browser(df_profils),
         f"Cartes grises ({n_cg})": lambda: page_cartes_grises(df_cg),
         "Champs null": lambda: page_null_fields(df_null, df_type_null),
         "Utilisabilité": lambda: page_usability(df_usable),
@@ -729,11 +1066,16 @@ def main():
 
     with st.sidebar:
         st.header("Navigation")
-        choice = st.radio("Page", list(pages.keys()))
+        st.markdown("**Profils unifiés**")
+        choice = st.radio("Page", list(pages.keys()), label_visibility="collapsed")
         st.divider()
         if st.button("🔄 Rafraîchir les données"):
             st.rerun()
-        st.caption(f"{len(records)} fichiers chargés ({n_permis} permis · {n_cg} CG)")
+        st.caption(
+            f"{len(records)} documents · {n_cg} CG\n\n"
+            f"{n_profils} profil(s) · "
+            f"{int(df_profils['utilisable'].sum()) if not df_profils.empty else 0} utilisable(s)"
+        )
 
     pages[choice]()
 
