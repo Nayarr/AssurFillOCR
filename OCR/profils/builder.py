@@ -52,15 +52,16 @@ def _profil_permis_fr(recto: dict, verso: dict) -> tuple[dict, list[dict]]:
 
 def _profil_permis_dz(recto: dict, verso: dict) -> tuple[dict, list[dict]]:
     """
-    Permis DZ nouveau : le verso (MRZ ICAO) est la source prioritaire pour tous les champs
-    partagés (nom, prénom, dates, numéro de permis). Le recto sert de fallback.
+    Permis DZ nouveau : le verso (MRZ ICAO) est la source prioritaire pour dates et numéro.
+    Pour nom/prénom, si les deux sources sont similaires on prend le plus long (l'OCR MRZ
+    peut amputer une lettre en début de champ). Si elles divergent fortement, conflit majeur.
     """
     conflits: list[dict] = []
 
     nom, c = fusionner_texte(
         verso.get("nom"), recto.get("nom"),
         "verso_mrz", "recto_ocr", "nom",
-        priorite="source_a",
+        priorite="plus_long",
     )
     if c:
         conflits.append(c)
@@ -68,7 +69,7 @@ def _profil_permis_dz(recto: dict, verso: dict) -> tuple[dict, list[dict]]:
     prenom, c = fusionner_texte(
         verso.get("prenom"), recto.get("prenom"),
         "verso_mrz", "recto_ocr", "prenom",
-        priorite="source_a",
+        priorite="plus_long",
     )
     if c:
         conflits.append(c)
