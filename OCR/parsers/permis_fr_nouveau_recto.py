@@ -56,6 +56,8 @@ def parse(texts: list[str], scores: list[float]) -> dict:
             s = re.sub(r"^\d+[a-z]?[.\s]\d*\s*", "", t).strip()
             s = re.sub(r"^[^A-Za-zÀ-ÿ]{1,2}", "", s).strip()
             s = re.sub(r"[^A-Za-zÀ-ÿ\-']{1,2}$", "", s).strip()
+            s = re.sub(r"^[a-zà-ÿ](?=[A-ZÀ-Ÿ])", "", s).strip()
+            s = re.sub(r"(?<=[A-ZÀ-Ÿ])[a-zà-ÿ]$", "", s).strip()
             data["nom"] = s.upper() or None
 
         # ── Nom — fallback positionnel (après l'en-tête, avant les champs datés)
@@ -64,13 +66,18 @@ def parse(texts: list[str], scores: list[float]) -> dict:
                 clean = re.sub(r"^[^A-Za-zÀ-ÿ]{1,2}(?=[A-Za-zÀ-ÿ]{3})", "", t)
                 alpha = len(re.findall(r"[A-Za-zÀ-ÿ]", clean))
                 if alpha >= 3 and alpha / len(clean) >= 0.75:
-                    data["nom"] = re.sub(r"[^A-Za-zÀ-ÿ\-' ]", "", clean).upper() or None
+                    s = re.sub(r"[^A-Za-zÀ-ÿ\-' ]", "", clean)
+                    s = re.sub(r"^[a-zà-ÿ](?=[A-ZÀ-Ÿ])", "", s).strip()
+                    s = re.sub(r"(?<=[A-ZÀ-Ÿ])[a-zà-ÿ]$", "", s).strip()
+                    data["nom"] = s.upper() or None
 
         # ── Prénom — champ 2.
         elif data["prenom"] is None and re.match(r"^2[.\s]", t):
             s = re.sub(r"^\d+[a-z]?[.\s]\d*\s*", "", t).strip()
             s = re.sub(r"^[^A-Za-zÀ-ÿ]{1,2}", "", s).strip()
             s = re.sub(r"[^A-Za-zÀ-ÿ\-']{1,2}$", "", s).strip()
+            s = re.sub(r"^[a-zà-ÿ](?=[A-ZÀ-Ÿ])", "", s).strip()
+            s = re.sub(r"(?<=[A-ZÀ-Ÿ])[a-zà-ÿ]$", "", s).strip()
             data["prenom"] = s or None
 
         # ── Prénom — fallback positionnel (après nom, avant les champs datés)
@@ -86,7 +93,10 @@ def parse(texts: list[str], scores: list[float]) -> dict:
                 clean = re.sub(r"^[^A-Za-zÀ-ÿ]{1,2}(?=[A-Za-zÀ-ÿ]{3})", "", t)
                 alpha = len(re.findall(r"[A-Za-zÀ-ÿ]", clean))
                 if alpha >= 3 and alpha / len(clean) >= 0.6:
-                    data["prenom"] = re.sub(r"[^A-Za-zÀ-ÿ\-' ]", "", clean) or None
+                    s = re.sub(r"[^A-Za-zÀ-ÿ\-' ]", "", clean)
+                    s = re.sub(r"^[a-zà-ÿ](?=[A-ZÀ-Ÿ])", "", s).strip()
+                    s = re.sub(r"(?<=[A-ZÀ-Ÿ])[a-zà-ÿ]$", "", s).strip()
+                    data["prenom"] = s or None
 
         # ── Numéro permis — champ 5. (fallback si MRZ absent/illisible)
         elif data["numero_permis"] is None and re.match(r"^5[.\s]", t):
