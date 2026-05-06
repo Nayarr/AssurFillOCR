@@ -37,16 +37,16 @@ def parse(texts: list[str], scores: list[float]) -> dict:
             continue
 
         # ── Ligne MRZ : D1FRA<NUMERO(9)>...<NOM<<
+        # Le MRZ est la source la plus fiable pour le nom — il écrase toujours la lecture visuelle.
         if re.match(r"^D1FRA[A-Z0-9]", t) and len(t) > 10:
             if data["numero_permis"] is None:
                 m = re.search(r"D1FRA([A-Z0-9]{9})", t)
                 if m:
                     data["numero_permis"] = m.group(1)
-            if data["nom"] is None and "<" in t:
-                nom_part = re.sub(r"0", "O", t[20:]) if len(t) > 20 else t
-                matches = re.findall(r"([A-Z]{2,})<", nom_part)
-                if matches:
-                    data["nom"] = matches[-1]
+            if "<" in t:
+                nom_mrz = _extract_nom_mrz(t)
+                if nom_mrz:
+                    data["nom"] = nom_mrz  # priorité absolue sur la lecture visuelle
 
         # ── Nom — champ 1.
         elif data["nom"] is None and re.match(r"^1[.\s]", t):
@@ -71,13 +71,19 @@ def parse(texts: list[str], scores: list[float]) -> dict:
                     s = re.sub(r"(?<=[A-ZÀ-Ÿ])[a-zà-ÿ]$", "", s).strip()
                     data["nom"] = s.upper() or None
 
-        # ── Prénom — champ 2.
+        # ── Prénom — champ 2. (point bien lu ou mal lu comme lettre par OCR)
         elif data["prenom"] is None and re.match(r"^2[.\s]", t):
             s = re.sub(r"^\d+[a-z]?[.\s]\d*\s*", "", t).strip()
             s = re.sub(r"^[^A-Za-zÀ-ÿ]{1,2}", "", s).strip()
             s = re.sub(r"[^A-Za-zÀ-ÿ\-']{1,2}$", "", s).strip()
             s = re.sub(r"^[a-zà-ÿ](?=[A-ZÀ-Ÿ])", "", s).strip()
             s = re.sub(r"(?<=[A-ZÀ-Ÿ])[a-zà-ÿ]$", "", s).strip()
+            data["prenom"] = s or None
+
+        elif data["prenom"] is None and re.match(r"^2[A-Z](?=[A-Z]{2,})", t):
+            # OCR a lu "2." comme "2A" (ex : "2ARACHIDA" → prénom "RACHIDA")
+            s = re.sub(r"^2[A-Z]", "", t).strip()
+            s = re.sub(r"[^A-Za-zÀ-ÿ\-']{1,2}$", "", s).strip()
             data["prenom"] = s or None
 
         # ── Prénom — fallback positionnel (après nom, avant les champs datés)
@@ -134,7 +140,37 @@ def parse(texts: list[str], scores: list[float]) -> dict:
                 data["date_expiration"] = d
                 break
 
+    # ── Normalisation OCR : 1→I et 0→O au sein des noms (confusables fréquents)
+    data["nom"] = _fix_ocr_confusables(data["nom"])
+    data["prenom"] = _fix_ocr_confusables(data["prenom"])
+
     return data
+
+
+def _extract_nom_mrz(mrz: str) -> str | None:
+    """
+    Extrait le nom depuis la ligne MRZ d'un permis FR (format D1FRA...).
+    Gère les noms composés : AIT<IDIR → 'AIT IDIR', AZIRI<<< → 'AZIRI'.
+    Toujours prioritaire sur la lecture visuelle.
+    """
+    zone = mrz[20:] if len(mrz) > 20 else mrz
+    zone = zone.replace("0", "O")
+    zone = re.sub(r"^[^A-Z<]*", "", zone)
+    zone = re.sub(r"[^A-Z<].*$", "", zone)
+    if not zone:
+        return None
+    surname_part = zone.split("<<")[0]
+    nom = surname_part.replace("<", " ").strip()
+    return nom or None
+
+
+def _fix_ocr_confusables(s: str | None) -> str | None:
+    """Corrige les confusions chiffre/lettre fréquentes dans les noms OCR."""
+    if s is None:
+        return None
+    s = re.sub(r"(?<=[A-Za-z])1(?=[A-Za-z])", "I", s)
+    s = re.sub(r"(?<=[A-Za-z])0(?=[A-Za-z])", "O", s)
+    return s
 
 
 def _parse_date(raw: str) -> str | None:
