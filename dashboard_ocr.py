@@ -19,7 +19,7 @@ OUTPUT_DIR = Path(__file__).parent / "output"
 # Tous les champs trackés dans les stats de null
 CHAMPS_PAR_TYPE = {
     "permis_dz_nouveau_recto": ["nom", "prenom", "date_naissance", "date_expiration", "numero_permis"],
-    "permis_dz_nouveau_verso": ["nom", "prenom", "sexe", "date_naissance", "date_expiration", "numero_permis"],
+    "permis_dz_nouveau_verso": ["nom", "prenom", "sexe", "date_naissance", "date_expiration", "numero_permis", "obtention_B"],
     "permis_fr_nouveau_recto": ["nom", "prenom", "date_naissance", "date_expiration", "numero_permis"],
     "permis_fr_nouveau_verso": ["obtention_B"],
     "cg_normale": ["numero_immatriculation", "vin", "proprietaire_nom", "proprietaire_prenom", "conducteur", "marque", "modele", "puissance_fiscale"],
@@ -59,11 +59,14 @@ CHAMPS_PROFIL = [
     "proprietaire_nom", "proprietaire_prenom", "conducteur",
 ]
 
-# Champs indispensables pour qu'un profil soit "utilisable" en assurance
+# Champs qui déterminent l'utilisabilité d'un profil en assurance.
+# Chaque champ présent ajoute 1/9 au taux d'utilisabilité (0–100 %).
+# Un profil est "complet" (100 %) si tous sont renseignés ; il reste
+# partiellement utilisable même s'il en manque un ou plusieurs.
 CHAMPS_REQUIS_PROFIL = [
-    "nom", "prenom", "date_naissance",
-    "numero_permis", "date_expiration_permis",
-    "numero_immatriculation", "marque", "modele",
+    "nom", "prenom", "date_naissance", "obtention_B",
+    "numero_immatriculation", "marque", "modele", "puissance_fiscale",
+    "numero_permis",
 ]
 
 # ─── Data loading ─────────────────────────────────────────────────────────────
@@ -316,7 +319,10 @@ def compute_profile_frames(profiles):
         n_majeur = sum(1 for c in conflits if c.get("type") == "majeur")
 
         manquants = [c for c in CHAMPS_REQUIS_PROFIL if is_null(p.get(c))]
-        utilisable = len(manquants) == 0
+        n_requis = len(CHAMPS_REQUIS_PROFIL)
+        n_presents = n_requis - len(manquants)
+        taux = round(n_presents / n_requis * 100, 1) if n_requis else 0.0
+        utilisable = taux == 100.0
 
         row = {
             "_dossier": p["_dossier"],
@@ -326,6 +332,7 @@ def compute_profile_frames(profiles):
             "type_cg": type_cg,
             "n_conflits": n_conflits,
             "n_conflits_majeur": n_majeur,
+            "taux_utilisabilite": taux,
             "utilisable": utilisable,
             "champs_manquants": ", ".join(manquants) if manquants else "—",
         }
@@ -793,15 +800,17 @@ def page_profiles_overview(profiles, df_profils, df_conflits):
     total = len(df_profils)
     n_fr = int((df_profils["pays"] == "FR").sum())
     n_dz = int((df_profils["pays"] == "DZ").sum())
-    n_utilisable = int(df_profils["utilisable"].sum())
+    n_complets = int(df_profils["utilisable"].sum())
     n_avec_conflits = int((df_profils["n_conflits"] > 0).sum())
+    taux_moyen = df_profils["taux_utilisabilite"].mean()
 
-    c1, c2, c3, c4, c5 = st.columns(5)
+    c1, c2, c3, c4, c5, c6 = st.columns(6)
     c1.metric("Profils générés", total)
     c2.metric("Permis FR", n_fr)
     c3.metric("Permis DZ", n_dz)
-    c4.metric("Profils utilisables", f"{n_utilisable}/{total}")
-    c5.metric("Avec conflits", n_avec_conflits,
+    c4.metric("Profils complets (100 %)", f"{n_complets}/{total}")
+    c5.metric("Taux moy. utilisabilité", f"{taux_moyen:.1f}%")
+    c6.metric("Avec conflits", n_avec_conflits,
               delta=f"{n_avec_conflits/total*100:.0f}%", delta_color="inverse")
 
     col1, col2 = st.columns(2)
@@ -815,16 +824,30 @@ def page_profiles_overview(profiles, df_profils, df_conflits):
         st.plotly_chart(fig, use_container_width=True)
 
     with col2:
-        ok_counts = df_profils.groupby("profil_type")["utilisable"].agg(["sum", "count"]).reset_index()
-        ok_counts["pct"] = (ok_counts["sum"] / ok_counts["count"] * 100).round(1)
-        fig2 = px.bar(ok_counts, x="profil_type", y="pct", text="pct",
-                      color="pct", color_continuous_scale=["#EF553B", "#FFA15A", "#00CC96"],
-                      title="% de profils utilisables par type",
-                      labels={"profil_type": "Type", "pct": "% utilisable"})
+        taux_par_type = df_profils.groupby("profil_type")["taux_utilisabilite"].mean().reset_index()
+        taux_par_type["taux_utilisabilite"] = taux_par_type["taux_utilisabilite"].round(1)
+        fig2 = px.bar(taux_par_type, x="profil_type", y="taux_utilisabilite",
+                      text="taux_utilisabilite",
+                      color="taux_utilisabilite",
+                      color_continuous_scale=["#EF553B", "#FFA15A", "#00CC96"],
+                      title="Taux d'utilisabilité moyen par type de profil",
+                      labels={"profil_type": "Type", "taux_utilisabilite": "Taux moyen (%)"})
         fig2.update_traces(texttemplate="%{text}%", textposition="outside")
         fig2.update_coloraxes(showscale=False)
         fig2.update_layout(yaxis_range=[0, 110])
         st.plotly_chart(fig2, use_container_width=True)
+
+    st.subheader("Distribution du taux d'utilisabilité")
+    fig_dist = px.histogram(
+        df_profils, x="taux_utilisabilite", nbins=10,
+        color_discrete_sequence=["#636EFA"],
+        labels={"taux_utilisabilite": "Taux d'utilisabilité (%)"},
+        title="Répartition des profils par taux d'utilisabilité",
+    )
+    fig_dist.add_vline(x=100, line_dash="dash", line_color="#00CC96",
+                       annotation_text="Complet", annotation_position="top left")
+    fig_dist.update_layout(bargap=0.1)
+    st.plotly_chart(fig_dist, use_container_width=True)
 
     st.subheader("Taux de null par champ (tous profils)")
     null_rows = []
@@ -850,12 +873,16 @@ def page_profiles_overview(profiles, df_profils, df_conflits):
     fig3.update_layout(yaxis_range=[0, 110])
     st.plotly_chart(fig3, use_container_width=True)
 
-    st.subheader("Profils incomplets")
+    st.subheader("Profils non complets (taux < 100 %)")
+    st.caption("Ces profils restent partiellement utilisables selon leur taux.")
     incomplets = df_profils[~df_profils["utilisable"]][
-        ["_dossier", "profil_type", "champs_manquants"]
-    ].rename(columns={"_dossier": "Dossier", "profil_type": "Type", "champs_manquants": "Champs manquants"})
+        ["_dossier", "profil_type", "taux_utilisabilite", "champs_manquants"]
+    ].sort_values("taux_utilisabilite", ascending=False).rename(columns={
+        "_dossier": "Dossier", "profil_type": "Type",
+        "taux_utilisabilite": "Taux (%)", "champs_manquants": "Champs manquants",
+    })
     if incomplets.empty:
-        st.success("Tous les profils sont utilisables !")
+        st.success("Tous les profils sont complets à 100 % !")
     else:
         st.dataframe(incomplets, use_container_width=True, hide_index=True)
 
@@ -956,17 +983,19 @@ def page_profiles_browser(df_profils):
         types = ["Tous"] + sorted(df_profils["profil_type"].unique().tolist())
         filtre_type = st.selectbox("Type de profil", types)
     with col_f2:
-        filtre_utilisable = st.selectbox("Utilisabilité", ["Tous", "Utilisables", "Incomplets"])
+        filtre_utilisable = st.selectbox("Utilisabilité", ["Tous", "Complets (100 %)", "Partiels (<100 %)", "Critiques (<50 %)"])
     with col_f3:
         filtre_conflits = st.selectbox("Conflits", ["Tous", "Avec conflits", "Sans conflit"])
 
     df = df_profils.copy()
     if filtre_type != "Tous":
         df = df[df["profil_type"] == filtre_type]
-    if filtre_utilisable == "Utilisables":
+    if filtre_utilisable == "Complets (100 %)":
         df = df[df["utilisable"]]
-    elif filtre_utilisable == "Incomplets":
+    elif filtre_utilisable == "Partiels (<100 %)":
         df = df[~df["utilisable"]]
+    elif filtre_utilisable == "Critiques (<50 %)":
+        df = df[df["taux_utilisabilite"] < 50]
     if filtre_conflits == "Avec conflits":
         df = df[df["n_conflits"] > 0]
     elif filtre_conflits == "Sans conflit":
@@ -976,16 +1005,17 @@ def page_profiles_browser(df_profils):
 
     display_cols = [
         "_dossier", "profil_type", "nom", "prenom", "date_naissance",
-        "numero_permis", "pays_permis", "date_expiration_permis",
-        "numero_immatriculation", "marque", "modele", "type_cg",
-        "n_conflits", "utilisable",
+        "numero_permis", "obtention_B",
+        "numero_immatriculation", "marque", "modele", "puissance_fiscale", "type_cg",
+        "n_conflits", "taux_utilisabilite",
     ]
     rename_map = {
         "_dossier": "Dossier", "profil_type": "Type", "nom": "Nom", "prenom": "Prénom",
         "date_naissance": "Naissance", "numero_permis": "N° permis",
-        "pays_permis": "Pays", "date_expiration_permis": "Expiration permis",
+        "obtention_B": "Obtention B",
         "numero_immatriculation": "Immatriculation", "marque": "Marque",
-        "modele": "Modèle", "type_cg": "CG", "n_conflits": "Conflits", "utilisable": "✓",
+        "modele": "Modèle", "puissance_fiscale": "CV fisc.", "type_cg": "CG",
+        "n_conflits": "Conflits", "taux_utilisabilite": "Taux (%)",
     }
     st.dataframe(
         df[display_cols].rename(columns=rename_map),
@@ -996,6 +1026,15 @@ def page_profiles_browser(df_profils):
     dossier_sel = st.selectbox("Choisir un dossier", df["_dossier"].tolist())
     if dossier_sel:
         row = df[df["_dossier"] == dossier_sel].iloc[0]
+
+        taux = row["taux_utilisabilite"]
+        couleur = "#00CC96" if taux == 100 else ("#FFA15A" if taux >= 50 else "#EF553B")
+        st.markdown(
+            f"**Taux d'utilisabilité : <span style='color:{couleur}'>{taux:.1f}%</span>**"
+            + (" ✅" if taux == 100 else f" — champs manquants : *{row['champs_manquants']}*"),
+            unsafe_allow_html=True,
+        )
+
         col_a, col_b, col_c = st.columns(3)
 
         with col_a:
