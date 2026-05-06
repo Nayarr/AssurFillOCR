@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AssurFast — Rapport SEO Complet | 25 Avril 2026</title>
+<style>
+  :root {
+    --navy: #1e3a5f;
+    --navy-light: #2c4f7c;
+    --gold: #b8860b;
+    --green: #2d6a4f;
+    --amber: #d4740e;
+    --red: #c53030;
+    --gray: #4a5568;
+    --gray-light: #f7f7f5;
+    --border: #d6d3cc;
+    --cream: #faf9f7;
+    --text: #1a1a2e;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: var(--cream); color: var(--text); font-size: 14px; line-height: 1.6; }
+
+  /* COVER */
+  .cover { background: var(--navy); color: white; padding: 60px 48px 48px; page-break-after: always; }
+  .cover-brand { font-size: 11px; letter-spacing: 3px; text-transform: uppercase; color: rgba(255,255,255,0.5); margin-bottom: 8px; }
+  .cover-title { font-size: 36px; font-weight: 700; margin-bottom: 4px; }
+  .cover-subtitle { font-size: 18px; color: rgba(255,255,255,0.7); margin-bottom: 48px; }
+  .cover-meta { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 24px; margin-bottom: 48px; }
+  .cover-meta-item label { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: rgba(255,255,255,0.45); display: block; margin-bottom: 4px; }
+  .cover-meta-item span { font-size: 14px; color: rgba(255,255,255,0.9); }
+
+  /* SCORE DIAL */
+  .score-section { display: flex; align-items: center; gap: 48px; margin-bottom: 48px; background: rgba(255,255,255,0.07); border-radius: 12px; padding: 32px; }
+  .score-dial { text-align: center; flex-shrink: 0; }
+  .score-number { font-size: 72px; font-weight: 800; color: #e2a84b; line-height: 1; }
+  .score-label { font-size: 12px; letter-spacing: 2px; text-transform: uppercase; color: rgba(255,255,255,0.5); margin-top: 4px; }
+  .score-bars { flex: 1; }
+  .score-bar-row { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+  .score-bar-label { font-size: 12px; color: rgba(255,255,255,0.7); width: 160px; flex-shrink: 0; }
+  .score-bar-track { flex: 1; height: 8px; background: rgba(255,255,255,0.15); border-radius: 4px; overflow: hidden; }
+  .score-bar-fill { height: 100%; border-radius: 4px; }
+  .score-bar-value { font-size: 12px; color: rgba(255,255,255,0.6); width: 32px; text-align: right; flex-shrink: 0; }
+
+  /* LAYOUT */
+  .page { max-width: 900px; margin: 0 auto; padding: 40px 48px; }
+  h1 { font-size: 24px; font-weight: 700; color: var(--navy); border-bottom: 3px solid var(--navy); padding-bottom: 10px; margin-bottom: 24px; margin-top: 40px; page-break-after: avoid; }
+  h2 { font-size: 17px; font-weight: 700; color: var(--navy); margin: 28px 0 12px; page-break-after: avoid; }
+  h3 { font-size: 14px; font-weight: 600; color: var(--navy-light); margin: 20px 0 8px; page-break-after: avoid; }
+  p { margin-bottom: 12px; color: var(--gray); }
+
+  /* BADGE */
+  .badge { display: inline-block; padding: 2px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; }
+  .badge-critical { background: #ffe5e5; color: var(--red); }
+  .badge-high { background: #fff3e0; color: var(--amber); }
+  .badge-medium { background: #fff8e1; color: #8a6200; }
+  .badge-low { background: #e8f5e9; color: var(--green); }
+  .badge-pass { background: #e8f5e9; color: var(--green); }
+  .badge-fail { background: #ffe5e5; color: var(--red); }
+  .badge-unknown { background: #f0f0f0; color: #666; }
+
+  /* SCORE BADGE */
+  .score-badge { display: inline-block; padding: 3px 12px; border-radius: 20px; font-size: 12px; font-weight: 700; }
+  .score-good { background: #e8f5e9; color: var(--green); }
+  .score-warn { background: #fff3e0; color: var(--amber); }
+  .score-bad { background: #ffe5e5; color: var(--red); }
+
+  /* ACTION CARD */
+  .action-card { border-left: 4px solid var(--border); padding: 16px 20px; margin-bottom: 12px; background: white; border-radius: 0 8px 8px 0; page-break-inside: avoid; }
+  .action-card.critical { border-left-color: var(--red); }
+  .action-card.high { border-left-color: var(--amber); }
+  .action-card.medium { border-left-color: #d4a017; }
+  .action-card.low { border-left-color: var(--green); }
+  .action-card-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .action-card-title { font-weight: 600; font-size: 14px; color: var(--text); }
+  .action-card-meta { font-size: 12px; color: var(--gray); }
+  .action-card-body { font-size: 13px; color: var(--gray); }
+  .action-card-body ul { margin: 8px 0 0 16px; }
+  .action-card-body li { margin-bottom: 4px; }
+
+  /* TABLE */
+  table { width: 100%; border-collapse: collapse; margin: 16px 0 24px; font-size: 13px; page-break-inside: auto; }
+  th { background: var(--navy); color: white; padding: 10px 12px; text-align: left; font-size: 11px; letter-spacing: 0.5px; text-transform: uppercase; }
+  td { padding: 9px 12px; border-bottom: 1px solid var(--border); color: var(--gray); vertical-align: top; }
+  tr:nth-child(even) td { background: var(--gray-light); }
+  tr:hover td { background: #f0f0ec; }
+
+  /* CODE */
+  pre { background: #1a1a2e; color: #e2e8f0; padding: 16px 20px; border-radius: 8px; overflow-x: auto; font-size: 12px; line-height: 1.5; margin: 12px 0 20px; page-break-inside: avoid; }
+  code { font-family: 'Cascadia Code', 'SF Mono', 'Fira Code', monospace; }
+  p code, td code, li code { background: #f0f0ec; padding: 1px 5px; border-radius: 3px; font-size: 12px; color: var(--navy); }
+
+  /* SCORE TABLE */
+  .score-table td:nth-child(3) { font-weight: 700; }
+
+  /* CALLOUT */
+  .callout { padding: 14px 18px; border-radius: 8px; margin: 16px 0 20px; font-size: 13px; page-break-inside: avoid; }
+  .callout-warning { background: #fff8e1; border-left: 4px solid var(--amber); color: #5a3e00; }
+  .callout-info { background: #e3f2fd; border-left: 4px solid #1e88e5; color: #0d3c6b; }
+  .callout-success { background: #e8f5e9; border-left: 4px solid var(--green); color: #1a3d2b; }
+  .callout-danger { background: #ffe5e5; border-left: 4px solid var(--red); color: #5c1010; }
+
+  /* SECTION HEADER */
+  .section-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+  .section-icon { width: 36px; height: 36px; border-radius: 8px; background: var(--navy); display: flex; align-items: center; justify-content: center; color: white; font-size: 16px; flex-shrink: 0; }
+
+  /* ROADMAP */
+  .roadmap { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0; }
+  .roadmap-card { background: white; border: 1px solid var(--border); border-radius: 8px; padding: 16px; page-break-inside: avoid; }
+  .roadmap-card-phase { font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: var(--gray); margin-bottom: 4px; }
+  .roadmap-card-title { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
+  .roadmap-card-score { font-size: 28px; font-weight: 800; }
+  .roadmap-card-score.bad { color: var(--red); }
+  .roadmap-card-score.warn { color: var(--amber); }
+  .roadmap-card-score.good { color: var(--green); }
+
+  /* FOOTER */
+  .report-footer { margin-top: 60px; padding-top: 24px; border-top: 2px solid var(--border); text-align: center; color: var(--gray); font-size: 12px; }
+  .community-box { background: var(--navy); color: white; border-radius: 10px; padding: 20px 28px; margin-top: 40px; text-align: center; }
+  .community-box h3 { color: white; margin: 0 0 8px; font-size: 16px; }
+  .community-box p { color: rgba(255,255,255,0.7); font-size: 13px; margin-bottom: 12px; }
+  .community-links { display: flex; gap: 12px; justify-content: center; }
+  .community-link { padding: 8px 20px; border-radius: 6px; font-size: 13px; font-weight: 600; text-decoration: none; }
+  .community-link.free { background: rgba(255,255,255,0.15); color: white; }
+  .community-link.pro { background: var(--gold); color: white; }
+
+  @media print {
+    .cover { page-break-after: always; }
+    h1 { page-break-before: auto; }
+    .no-print { display: none; }
+    pre { white-space: pre-wrap; word-break: break-all; }
+  }
+</style>
+</head>
+<body>
+
+<!-- COVER PAGE -->
+<div class="cover">
+  <div class="cover-brand">Rapport SEO Complet</div>
+  <div class="cover-title">AssurFast</div>
+  <div class="cover-subtitle">www.assurfast.fr — Audit SEO Multi-Spécialistes</div>
+
+  <div class="cover-meta">
+    <div class="cover-meta-item"><label>Date</label><span>25 Avril 2026</span></div>
+    <div class="cover-meta-item"><label>Type</label><span>Courtier en Assurance (Local)</span></div>
+    <div class="cover-meta-item"><label>ORIAS</label><span>25005312</span></div>
+    <div class="cover-meta-item"><label>Localisation</label><span>Alfortville, 94140</span></div>
+    <div class="cover-meta-item"><label>Plateforme</label><span>Wix</span></div>
+    <div class="cover-meta-item"><label>Pages indexées</label><span>12 pages</span></div>
+  </div>
+
+  <div class="score-section">
+    <div class="score-dial">
+      <div class="score-number">36</div>
+      <div class="score-label">Score SEO Global / 100</div>
+    </div>
+    <div class="score-bars">
+      <div class="score-bar-row">
+        <div class="score-bar-label">SEO Technique</div>
+        <div class="score-bar-track"><div class="score-bar-fill" style="width:45%;background:#d4740e;"></div></div>
+        <div class="score-bar-value">45</div>
+      </div>
+      <div class="score-bar-row">
+        <div class="score-bar-label">Qualité Contenu (E-E-A-T)</div>
+        <div class="score-bar-track"><div class="score-bar-fill" style="width:41%;background:#d4740e;"></div></div>
+        <div class="score-bar-value">41</div>
+      </div>
+      <div class="score-bar-row">
+        <div class="score-bar-label">SEO On-Page</div>
+        <div class="score-bar-track"><div class="score-bar-fill" style="width:38%;background:#c53030;"></div></div>
+        <div class="score-bar-value">38</div>
+      </div>
+      <div class="score-bar-row">
+        <div class="score-bar-label">Schema Structuré</div>
+        <div class="score-bar-track"><div class="score-bar-fill" style="width:5%;background:#c53030;"></div></div>
+        <div class="score-bar-value">5</div>
+      </div>
+      <div class="score-bar-row">
+        <div class="score-bar-label">Performance (CWV)</div>
+        <div class="score-bar-track"><div class="score-bar-fill" style="width:50%;background:#d4740e;"></div></div>
+        <div class="score-bar-value">50</div>
+      </div>
+      <div class="score-bar-row">
+        <div class="score-bar-label">Lisibilité IA (GEO)</div>
+        <div class="score-bar-track"><div class="score-bar-fill" style="width:28%;background:#c53030;"></div></div>
+        <div class="score-bar-value">28</div>
+      </div>
+      <div class="score-bar-row">
+        <div class="score-bar-label">Images</div>
+        <div class="score-bar-track"><div class="score-bar-fill" style="width:25%;background:#c53030;"></div></div>
+        <div class="score-bar-value">25</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="font-size:12px;color:rgba(255,255,255,0.4);">Rapport généré par Claude Code · Propulsé par le skill claude-seo d'agricidaniel</div>
+</div>
+
+<!-- MAIN CONTENT -->
+<div class="page">
+
+  <!-- EXECUTIVE SUMMARY -->
+  <h1>Résumé Exécutif</h1>
+
+  <div class="callout callout-warning">
+    <strong>Score global : 36/100 — Zone Critique.</strong> AssurFast est un courtier récemment enregistré à l'ORIAS (préfixe "25" = 2025) avec un site Wix. La majorité des problèmes sont fondamentaux et corrigeables en 60–90 jours sans outil supplémentaire. La bonne nouvelle : les bots IA (GPTBot, ClaudeBot, PerplexityBot) ne sont pas bloqués — la base technique d'accessibilité est saine.
+  </div>
+
+  <h2>Points Positifs</h2>
+  <table>
+    <tr><th>Signal</th><th>Statut</th></tr>
+    <tr><td>HTTPS activé</td><td><span class="badge badge-pass">PASS</span></td></tr>
+    <tr><td>Sitemap déclaré dans robots.txt</td><td><span class="badge badge-pass">PASS</span></td></tr>
+    <tr><td>Structure sitemap index propre (Wix)</td><td><span class="badge badge-pass">PASS</span></td></tr>
+    <tr><td>Numéro ORIAS 25005312 visible en footer</td><td><span class="badge badge-pass">PASS</span></td></tr>
+    <tr><td>Adresse physique + téléphone présents</td><td><span class="badge badge-pass">PASS</span></td></tr>
+    <tr><td>Présence sur 4 réseaux sociaux</td><td><span class="badge badge-pass">PASS</span></td></tr>
+    <tr><td>Crawlers IA non bloqués dans robots.txt</td><td><span class="badge badge-pass">PASS</span></td></tr>
+    <tr><td>Blog existant (3 articles)</td><td><span class="badge badge-pass">PASS</span></td></tr>
+  </table>
+
+  <h2>Feuille de Route par Score</h2>
+  <div class="roadmap">
+    <div class="roadmap-card">
+      <div class="roadmap-card-phase">Maintenant</div>
+      <div class="roadmap-card-score bad">36</div>
+      <div>Score actuel</div>
+    </div>
+    <div class="roadmap-card">
+      <div class="roadmap-card-phase">Semaine 2 (fixes critiques)</div>
+      <div class="roadmap-card-score warn">~50</div>
+      <div>Schema + légal + OG tags + méta</div>
+    </div>
+    <div class="roadmap-card">
+      <div class="roadmap-card-phase">Mois 1 (fixes haute priorité)</div>
+      <div class="roadmap-card-score warn">~60</div>
+      <div>GBP + contenu + performance</div>
+    </div>
+    <div class="roadmap-card">
+      <div class="roadmap-card-phase">Mois 2–3 (moyen + local)</div>
+      <div class="roadmap-card-score good">~78</div>
+      <div>FAQs + llms.txt + citations + avis</div>
+    </div>
+  </div>
+
+  <!-- PLAN D'ACTION -->
+  <h1>Plan d'Action Priorisé</h1>
+
+  <h2>🔴 CRITIQUE — À corriger cette semaine</h2>
+
+  <div class="action-card critical">
+    <div class="action-card-header">
+      <span class="badge badge-critical">Critique</span>
+      <span class="action-card-title">1. Implémenter le schema InsuranceAgency (JSON-LD)</span>
+      <span class="action-card-meta">Schema · Technique · Local SEO</span>
+    </div>
+    <div class="action-card-body">
+      Aucun balisage structuré détecté sur l'ensemble du site. Cette action unique débloque : Knowledge Panel Google, éligibilité local pack, citation IA. JSON-LD complet fourni dans la section Schema ci-dessous.
+      <ul>
+        <li>Délai d'implémentation : 30 minutes</li>
+        <li>Impact attendu : Knowledge Panel + local pack + citations IA</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="action-card critical">
+    <div class="action-card-header">
+      <span class="badge badge-critical">Critique</span>
+      <span class="action-card-title">2. Conformité légale YMYL — Obligations ORIAS</span>
+      <span class="action-card-meta">Contenu · Confiance · Légal</span>
+    </div>
+    <div class="action-card-body">
+      Le droit français (Code des assurances) impose à tout intermédiaire ORIAS l'affichage de :
+      <ul>
+        <li>Numéro ORIAS 25005312 avec lien vers orias.fr — sur chaque page (footer)</li>
+        <li>Informations du médiateur : Médiateur de l'Assurance — mediation-assurance.org</li>
+        <li>Mention de la RC Professionnelle du courtier</li>
+        <li>Mention de la garantie financière (si applicable)</li>
+        <li>Politique de confidentialité RGPD + bandeau cookies (Axeptio ou Didomi recommandés)</li>
+      </ul>
+      Ces manques sont simultanément des infractions légales et des échecs de confiance YMYL pour Google.
+    </div>
+  </div>
+
+  <div class="action-card critical">
+    <div class="action-card-header">
+      <span class="badge badge-critical">Critique</span>
+      <span class="action-card-title">3. Pages de service en contenu insuffisant (thin content)</span>
+      <span class="action-card-meta">Contenu · E-E-A-T</span>
+    </div>
+    <div class="action-card-body">
+      Confirmé : page assurance-auto ≈ 150 mots, RC Décennale ≈ 400–500 mots. Minimums pour ranker :
+      <ul>
+        <li>Pages de service : 800 mots</li>
+        <li>Homepage : 500 mots</li>
+        <li>Aucune section FAQ, aucune tarification indicative, aucun contexte local</li>
+      </ul>
+      Priorité de réécriture : auto (volume le plus élevé) → RC décennale (intention commerciale la plus forte)
+    </div>
+  </div>
+
+  <div class="action-card critical">
+    <div class="action-card-header">
+      <span class="badge badge-critical">Critique</span>
+      <span class="action-card-title">4. Balises OG/social méta manquantes</span>
+      <span class="action-card-meta">Technique · Visuel</span>
+    </div>
+    <div class="action-card-body">
+      Zéro tag og:title, og:description, og:image, twitter:card détecté. Chaque lien partagé sur WhatsApp, Facebook ou LinkedIn (tous listés en footer) affiche une carte de prévisualisation vide. À corriger sur toutes les pages.
+    </div>
+  </div>
+
+  <div class="action-card critical">
+    <div class="action-card-header">
+      <span class="badge badge-critical">Critique</span>
+      <span class="action-card-title">5. Directive robots.txt malformée</span>
+      <span class="action-card-meta">Technique · Sitemap</span>
+    </div>
+    <div class="action-card-body">
+      <code>Disallow: *?lightbox=</code> — Google ignore cette règle (le wildcard doit commencer par /).
+      <br>Correction : <code>Disallow: /*?lightbox=</code>
+    </div>
+  </div>
+
+  <h2>🟠 HAUTE PRIORITÉ — Dans les 2 semaines</h2>
+
+  <div class="action-card high">
+    <div class="action-card-header">
+      <span class="badge badge-high">Haute</span>
+      <span class="action-card-title">6. Expert humain nommé / Page équipe (E-E-A-T YMYL)</span>
+    </div>
+    <div class="action-card-body">
+      Les QRG Google (sept. 2025) donnent une note "Fails to Meet" aux pages YMYL sans auteur humain identifiable. Créer une page "À propos" avec : nom complet du courtier, catégorie ORIAS (COA), années d'expérience, photo. Ajouter schema <code>Person</code>.
+    </div>
+  </div>
+
+  <div class="action-card high">
+    <div class="action-card-header">
+      <span class="badge badge-high">Haute</span>
+      <span class="action-card-title">7. Google Business Profile — Réclamer, optimiser, collecter des avis</span>
+    </div>
+    <div class="action-card-body">
+      <ul>
+        <li>Catégorie principale : <strong>"Courtier d'assurances"</strong> (facteur de classement #1)</li>
+        <li>Zone de service : Val-de-Marne + Paris 12e/13e</li>
+        <li>10+ photos (façade, logo, équipe)</li>
+        <li>Description avec "ORIAS 25005312", "Alfortville", "assurance auto", "habitation"</li>
+        <li>Règle des 18 jours (Sterling Sky) : les classements local pack baissent sans flux régulier d'avis</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="action-card high">
+    <div class="action-card-header">
+      <span class="badge badge-high">Haute</span>
+      <span class="action-card-title">8. Optimiser balises title, H1, meta description avec mots-clés locaux</span>
+    </div>
+    <div class="action-card-body">
+      <table style="margin:8px 0;">
+        <tr><th>Page</th><th>Title recommandé</th><th>H1 recommandé</th></tr>
+        <tr><td>Homepage</td><td>Courtier Assurance Alfortville | AssurFast | ORIAS 25005312</td><td>Votre courtier en assurance à Alfortville et en Île-de-France</td></tr>
+        <tr><td>/assurance-auto</td><td>Assurance Auto Alfortville — Devis Gratuit | AssurFast</td><td>Assurance auto à Alfortville : comparez et économisez</td></tr>
+        <tr><td>/rc-decennale</td><td>RC Décennale Artisans BTP | Attestation Immédiate | AssurFast</td><td>RC Décennale pas chère — attestation valide dès souscription</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="action-card high">
+    <div class="action-card-header">
+      <span class="badge badge-high">Haute</span>
+      <span class="action-card-title">9. Corriger Font Awesome render-blocking (LCP mobile +400–800ms)</span>
+    </div>
+    <div class="action-card-body">
+      Font Awesome 6.5 chargé de manière synchrone dans <code>&lt;head&gt;</code>. Remplacer par chargement async :
+    </div>
+  </div>
+
+  <div class="action-card high">
+    <div class="action-card-header">
+      <span class="badge badge-high">Haute</span>
+      <span class="action-card-title">10. Fix iOS font-size → zoom viewport (CLS mobile)</span>
+    </div>
+    <div class="action-card-body">
+      Libellés inputs à 0.8125rem (13px) — iOS Safari zoom automatique sur tout input &lt; 16px, détruisant le CLS mobile. Correction CSS une ligne.
+    </div>
+  </div>
+
+  <div class="action-card high">
+    <div class="action-card-header">
+      <span class="badge badge-high">Haute</span>
+      <span class="action-card-title">11. Différer les insertions DOM synchrones (INP/TBT)</span>
+    </div>
+    <div class="action-card-body">
+      ~419 insertions DOM synchrones au parse (pays, marques, modèles) bloquent le main thread 200–450ms sur Android. Encapsuler dans <code>requestIdleCallback</code>.
+    </div>
+  </div>
+
+  <div class="action-card high">
+    <div class="action-card-header">
+      <span class="badge badge-high">Haute</span>
+      <span class="action-card-title">12. Annuaires Tier 1 français (Citations locales)</span>
+    </div>
+    <div class="action-card-body">
+      Ordre de priorité : Pages Jaunes → Kompass → Societe.com → Verif.com → Bing Places → Apple Maps Connect. Utiliser exactement le même format NAP partout : <strong>"06 99 77 35 35"</strong> (avec espaces).
+    </div>
+  </div>
+
+  <h2>🟡 MOYENNE PRIORITÉ — Dans les 30 jours</h2>
+
+  <div class="action-card medium">
+    <div class="action-card-header">
+      <span class="badge badge-medium">Moyen</span>
+      <span class="action-card-title">13. Créer /llms.txt pour la recherche IA (GEO)</span>
+    </div>
+    <div class="action-card-body">
+      Aucun courtier en assurance français ne possède ce fichier — avantage de pionnier. Voir section GEO pour le template complet.
+    </div>
+  </div>
+
+  <div class="action-card medium">
+    <div class="action-card-header">
+      <span class="badge badge-medium">Moyen</span>
+      <span class="action-card-title">14. Sections FAQ sur toutes les pages de service</span>
+    </div>
+    <div class="action-card-body">
+      3–5 questions/réponses par page + FAQPage JSON-LD. Note : pas de rich result Google pour les sites commerciaux (restriction août 2023), mais fort signal de citation IA (Google AI Overviews, Perplexity, ChatGPT).
+    </div>
+  </div>
+
+  <div class="action-card medium">
+    <div class="action-card-header">
+      <span class="badge badge-medium">Moyen</span>
+      <span class="action-card-title">15. Schema BreadcrumbList sur toutes les pages de service</span>
+    </div>
+    <div class="action-card-body">Active l'affichage du fil d'Ariane dans les SERPs — améliore le CTR sans coût de contenu.</div>
+  </div>
+
+  <div class="action-card medium">
+    <div class="action-card-header">
+      <span class="badge badge-medium">Moyen</span>
+      <span class="action-card-title">16. Attribution auteur nommé sur le blog</span>
+    </div>
+    <div class="action-card-body">
+      3 articles (juillet 2025, "2 min de lecture") attribués à la marque "AssurFast" et non à une personne. Pour un site YMYL, l'attribution nominative avec les identifiants ORIAS est requise par les QRG.
+    </div>
+  </div>
+
+  <div class="action-card medium">
+    <div class="action-card-header">
+      <span class="badge badge-medium">Moyen</span>
+      <span class="action-card-title">17. Logos des assureurs partenaires</span>
+    </div>
+    <div class="action-card-body">Afficher les noms/logos des compagnies d'assurance brokées (AXA, Allianz, Generali, etc.). Signal d'autorité et de confiance, requis par la transparence réglementaire française.</div>
+  </div>
+
+  <h2>🟢 BASSE PRIORITÉ — Backlog</h2>
+
+  <div class="action-card low">
+    <div class="action-card-header">
+      <span class="badge badge-low">Bas</span>
+      <span class="action-card-title">18. Pages de localisation pour les villes adjacentes</span>
+    </div>
+    <div class="action-card-body">Priorité : Créteil, Charenton-le-Pont, Maisons-Alfort, Vitry-sur-Seine. Chaque page doit avoir 60%+ de contenu unique local pour éviter la classification "doorway page".</div>
+  </div>
+
+  <div class="action-card low">
+    <div class="action-card-header">
+      <span class="badge badge-low">Bas</span>
+      <span class="action-card-title">19. Implémenter IndexNow (Bing/Copilot)</span>
+    </div>
+    <div class="action-card-body">Notification instantanée des URLs à Bing lors des mises à jour de contenu. Sur Wix, activer via les paramètres SEO.</div>
+  </div>
+
+  <div class="action-card low">
+    <div class="action-card-header">
+      <span class="badge badge-low">Bas</span>
+      <span class="action-card-title">20. S'inscrire à PLANETE CSCA</span>
+    </div>
+    <div class="action-card-body">Association professionnelle française des courtiers. Backlink haute autorité + signal d'autorité E-E-A-T.</div>
+  </div>
+
+  <!-- SECTION TECHNIQUE -->
+  <h1>SEO Technique — Score : 45/100</h1>
+
+  <table>
+    <tr><th>Catégorie</th><th>Statut</th><th>Score</th><th>Priorité</th></tr>
+    <tr><td>Crawlabilité</td><td>robots.txt avec directive malformée</td><td><span class="score-badge score-warn">60/100</span></td><td><span class="badge badge-high">Haute</span></td></tr>
+    <tr><td>Indexabilité</td><td>Canonicals non vérifiés, risque de thin content</td><td><span class="score-badge score-warn">58/100</span></td><td><span class="badge badge-critical">Critique</span></td></tr>
+    <tr><td>Sécurité</td><td>HTTPS OK, headers de sécurité absents</td><td><span class="score-badge score-warn">62/100</span></td><td><span class="badge badge-critical">Critique</span></td></tr>
+    <tr><td>Structure URL</td><td>URLs propres, www/non-www non vérifié</td><td><span class="score-badge score-warn">70/100</span></td><td><span class="badge badge-high">Haute</span></td></tr>
+    <tr><td>Mobile</td><td>Probablement responsive, tap targets sous 48px</td><td><span class="score-badge score-warn">72/100</span></td><td><span class="badge badge-high">Haute</span></td></tr>
+    <tr><td>Core Web Vitals</td><td>LCP estimé 2.8–3.5s mobile (FAIL)</td><td><span class="score-badge score-bad">45/100</span></td><td><span class="badge badge-critical">Critique</span></td></tr>
+    <tr><td>Données structurées</td><td>Aucun schema détecté</td><td><span class="score-badge score-bad">5/100</span></td><td><span class="badge badge-critical">Critique</span></td></tr>
+    <tr><td>Rendu JavaScript</td><td>Wix = SSR partiel, insertions DOM synchrones</td><td><span class="score-badge score-warn">50/100</span></td><td><span class="badge badge-high">Haute</span></td></tr>
+    <tr><td>IndexNow</td><td>Non implémenté</td><td><span class="score-badge score-bad">10/100</span></td><td><span class="badge badge-low">Bas</span></td></tr>
+  </table>
+
+  <h2>Core Web Vitals — Estimations Mobile</h2>
+  <table>
+    <tr><th>Métrique</th><th>Valeur estimée</th><th>Seuil "Good"</th><th>Statut</th></tr>
+    <tr><td>LCP (Largest Contentful Paint)</td><td>2.8–3.5s</td><td>&lt; 2.5s</td><td><span class="badge badge-fail">FAIL</span></td></tr>
+    <tr><td>INP (Interaction to Next Paint)</td><td>180–280ms</td><td>&lt; 200ms</td><td><span class="badge badge-high">BORDERLINE</span></td></tr>
+    <tr><td>CLS (Cumulative Layout Shift)</td><td>0.05–0.12</td><td>&lt; 0.1</td><td><span class="badge badge-high">BORDERLINE</span></td></tr>
+    <tr><td>TBT (Total Blocking Time)</td><td>250–400ms</td><td>&lt; 200ms</td><td><span class="badge badge-fail">FAIL</span></td></tr>
+    <tr><td>Score PageSpeed mobile estimé</td><td>45–58</td><td>90+</td><td><span class="badge badge-fail">FAIL</span></td></tr>
+  </table>
+
+  <h2>Corrections Performance — Code</h2>
+
+  <h3>1. Font Awesome async (LCP +400–800ms)</h3>
+  <pre><code>&lt;!-- SUPPRIMER de &lt;head&gt; : --&gt;
+&lt;link rel="stylesheet" href="https://cdnjs.cloudflare.com/.../all.min.css" /&gt;
+
+&lt;!-- REMPLACER PAR : --&gt;
+&lt;link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin&gt;
+&lt;link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"
+      as="style" onload="this.onload=null;this.rel='stylesheet'"&gt;
+&lt;noscript&gt;&lt;link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"&gt;&lt;/noscript&gt;</code></pre>
+
+  <h3>2. iOS font-size (CLS mobile)</h3>
+  <pre><code>/* Dans style.css — évite le zoom auto iOS sur les inputs */
+.pcv-input-wrapper--main-input,
+.pcv-html-input {
+  font-size: 1rem; /* était 0.875rem — 16px empêche le zoom iOS */
+}</code></pre>
+
+  <h3>3. Insertions DOM différées (INP/TBT)</h3>
+  <pre><code>// Envelopper les appels populate() dans requestIdleCallback
+requestIdleCallback(() => {
+  populate('pays-immat-options', PAYS, ...);
+  populate('brand-options', BRANDS, ...);
+  populatePhone('tel-indicatif-options');
+  // etc.
+}, { timeout: 1000 });</code></pre>
+
+  <!-- SCHEMA -->
+  <h1>Schema Structuré — Score : 5/100</h1>
+
+  <div class="callout callout-danger">
+    <strong>Aucun balisage structuré détecté sur l'ensemble du site.</strong> Pas de JSON-LD, pas de Microdata, pas de RDFa — sur aucune page. C'est la priorité #1 en termes d'impact SEO par heure de travail.
+  </div>
+
+  <h2>JSON-LD InsuranceAgency — À coller dans &lt;head&gt; de chaque page</h2>
+  <pre><code>&lt;script type="application/ld+json"&gt;
+{
+  "@context": "https://schema.org",
+  "@type": "InsuranceAgency",
+  "@id": "https://www.assurfast.fr/#organization",
+  "name": "AssurFast",
+  "url": "https://www.assurfast.fr/",
+  "telephone": "+33699773535",
+  "email": "contact@assurfast.fr",
+  "logo": "https://www.assurfast.fr/logo.png",
+  "address": {
+    "@type": "PostalAddress",
+    "streetAddress": "29 bis rue Etienne Dolet",
+    "addressLocality": "Alfortville",
+    "postalCode": "94140",
+    "addressCountry": "FR"
+  },
+  "geo": {
+    "@type": "GeoCoordinates",
+    "latitude": 48.80623,
+    "longitude": 2.42187
+  },
+  "openingHoursSpecification": [
+    {
+      "@type": "OpeningHoursSpecification",
+      "dayOfWeek": ["Monday","Tuesday","Wednesday","Thursday","Friday"],
+      "opens": "09:00",
+      "closes": "18:00"
+    }
+  ],
+  "areaServed": [
+    {"@type": "AdministrativeArea", "name": "Val-de-Marne"},
+    {"@type": "AdministrativeArea", "name": "Île-de-France"}
+  ],
+  "hasCredential": {
+    "@type": "EducationalOccupationalCredential",
+    "name": "ORIAS 25005312",
+    "url": "https://www.orias.fr"
+  },
+  "sameAs": [
+    "https://www.instagram.com/assurfast",
+    "https://www.facebook.com/assurfast",
+    "https://www.linkedin.com/company/assurfast"
+  ],
+  "priceRange": "€€"
+}
+&lt;/script&gt;</code></pre>
+
+  <h2>JSON-LD WebSite — Homepage uniquement</h2>
+  <pre><code>&lt;script type="application/ld+json"&gt;
+{
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  "@id": "https://www.assurfast.fr/#website",
+  "url": "https://www.assurfast.fr/",
+  "name": "AssurFast",
+  "inLanguage": "fr-FR",
+  "publisher": {"@id": "https://www.assurfast.fr/#organization"}
+}
+&lt;/script&gt;</code></pre>
+
+  <h2>JSON-LD Service — Exemple assurance auto (répliquer par produit)</h2>
+  <pre><code>&lt;script type="application/ld+json"&gt;
+{
+  "@context": "https://schema.org",
+  "@type": "Service",
+  "name": "Assurance Automobile",
+  "serviceType": "Assurance automobile",
+  "url": "https://www.assurfast.fr/assurance-auto",
+  "provider": {"@id": "https://www.assurfast.fr/#organization"},
+  "areaServed": {"@type": "Country", "name": "France"}
+}
+&lt;/script&gt;</code></pre>
+
+  <!-- CONTENU E-E-A-T -->
+  <h1>Contenu &amp; E-E-A-T — Score : 41/100</h1>
+
+  <div class="callout callout-danger">
+    <strong>Site YMYL (Your Money or Your Life)</strong> — l'assurance est une catégorie financière. Google applique les standards E-E-A-T les plus stricts. Score E-E-A-T composite : <strong>24/100</strong>.
+  </div>
+
+  <table>
+    <tr><th>Facteur E-E-A-T</th><th>Score</th><th>Poids</th><th>Score Pondéré</th></tr>
+    <tr><td>Expérience</td><td>18/100</td><td>20%</td><td>3.6</td></tr>
+    <tr><td>Expertise</td><td>22/100</td><td>25%</td><td>5.5</td></tr>
+    <tr><td>Autorité</td><td>14/100</td><td>25%</td><td>3.5</td></tr>
+    <tr><td>Confiance</td><td>38/100</td><td>30%</td><td>11.4</td></tr>
+    <tr><td><strong>TOTAL</strong></td><td></td><td>100%</td><td><strong>24.0 / 100</strong></td></tr>
+  </table>
+
+  <h2>Contenus insuffisants (Thin Content)</h2>
+  <table>
+    <tr><th>Page</th><th>Mots estimés</th><th>Minimum requis</th><th>Statut</th></tr>
+    <tr><td>/assurance-auto</td><td>~150 mots</td><td>800 mots</td><td><span class="badge badge-critical">CRITIQUE</span></td></tr>
+    <tr><td>/rc-decennale</td><td>~400–500 mots</td><td>800 mots</td><td><span class="badge badge-high">INSUFFISANT</span></td></tr>
+    <tr><td>Homepage</td><td>~200–350 mots</td><td>500 mots</td><td><span class="badge badge-high">INSUFFISANT</span></td></tr>
+    <tr><td>Blog (3 articles)</td><td>~2 min de lecture chacun</td><td>1 500+ mots/article</td><td><span class="badge badge-high">INSUFFISANT</span></td></tr>
+  </table>
+
+  <!-- GEO / IA -->
+  <h1>Lisibilité IA (GEO) — Score : 28/100</h1>
+
+  <table>
+    <tr><th>Signal</th><th>Statut</th><th>Priorité</th></tr>
+    <tr><td>GPTBot / ClaudeBot bloqués</td><td><span class="badge badge-pass">Non bloqués ✓</span></td><td>—</td></tr>
+    <tr><td>llms.txt</td><td><span class="badge badge-fail">ABSENT</span></td><td><span class="badge badge-medium">Moyen</span></td></tr>
+    <tr><td>Schema InsuranceAgency</td><td><span class="badge badge-fail">ABSENT</span></td><td><span class="badge badge-critical">Critique</span></td></tr>
+    <tr><td>Schema FAQPage</td><td><span class="badge badge-fail">ABSENT</span></td><td><span class="badge badge-medium">Moyen</span></td></tr>
+    <tr><td>Blocs de réponse directe (50–100 mots)</td><td><span class="badge badge-fail">ABSENT</span></td><td><span class="badge badge-high">Haute</span></td></tr>
+    <tr><td>Auteur expert nommé</td><td><span class="badge badge-fail">ABSENT</span></td><td><span class="badge badge-critical">Critique</span></td></tr>
+    <tr><td>IndexNow (Bing/Copilot)</td><td><span class="badge badge-fail">ABSENT</span></td><td><span class="badge badge-low">Bas</span></td></tr>
+  </table>
+
+  <h2>Template /llms.txt recommandé</h2>
+  <pre><code># AssurFast
+> Courtier en assurances agréé basé à Alfortville (94), France.
+> ORIAS 25005312. Assurance auto, moto, habitation, santé, RC Pro.
+
+## Pages essentielles
+- [Accueil](https://www.assurfast.fr/)
+- [Assurance Auto](https://www.assurfast.fr/assurance-auto)
+- [Assurance Moto](https://www.assurfast.fr/assurance-moto)
+- [Assurance Habitation](https://www.assurfast.fr/assurance-habitation)
+- [RC Décennale](https://www.assurfast.fr/rc-decennale)
+- [Contact](https://www.assurfast.fr/nous-contacter)
+
+## Informations réglementaires
+AssurFast est immatriculé à l'ORIAS (registre des intermédiaires en assurance, orias.fr).
+Activité soumise au contrôle de l'ACPR.</code></pre>
+
+  <!-- LOCAL SEO -->
+  <h1>SEO Local — Score : 31/100</h1>
+
+  <table>
+    <tr><th>Dimension</th><th>Score estimé</th><th>Priorité</th></tr>
+    <tr><td>Signaux GBP</td><td>35/100</td><td><span class="badge badge-critical">Critique</span></td></tr>
+    <tr><td>Avis et réputation</td><td>25/100</td><td><span class="badge badge-critical">Critique</span></td></tr>
+    <tr><td>SEO local on-page</td><td>40/100</td><td><span class="badge badge-high">Haute</span></td></tr>
+    <tr><td>NAP &amp; Citations</td><td>30/100</td><td><span class="badge badge-critical">Critique</span></td></tr>
+    <tr><td>Schema local</td><td>20/100</td><td><span class="badge badge-critical">Critique</span></td></tr>
+    <tr><td>Liens &amp; Autorité locaux</td><td>30/100</td><td><span class="badge badge-high">Haute</span></td></tr>
+  </table>
+
+  <h2>Opportunités de mots-clés locaux</h2>
+  <table>
+    <tr><th>Mot-clé</th><th>Volume estimé</th><th>Concurrence</th><th>Priorité</th></tr>
+    <tr><td>courtier assurance Alfortville</td><td>50–200/mois</td><td>Faible</td><td><span class="badge badge-critical">Critique</span></td></tr>
+    <tr><td>assurance auto Alfortville</td><td>100–500/mois</td><td>Faible-Moyen</td><td><span class="badge badge-critical">Critique</span></td></tr>
+    <tr><td>courtier assurance Créteil</td><td>100–500/mois</td><td>Moyen</td><td><span class="badge badge-high">Haute</span></td></tr>
+    <tr><td>assurance auto Créteil</td><td>500–1k/mois</td><td>Moyen</td><td><span class="badge badge-high">Haute</span></td></tr>
+    <tr><td>assurance Val-de-Marne</td><td>100–500/mois</td><td>Faible</td><td><span class="badge badge-high">Haute</span></td></tr>
+    <tr><td>assurance professionnelle Alfortville</td><td>&lt;50/mois</td><td>Très faible</td><td><span class="badge badge-medium">Moyen</span></td></tr>
+  </table>
+
+  <h2>Bloc footer légal recommandé</h2>
+  <pre><code>AssurFast — Courtier en assurance. Inscrit à l'ORIAS sous le numéro 25005312
+(www.orias.fr). Siège social : 29 bis rue Etienne Dolet, 94140 Alfortville.
+Téléphone : 06 99 77 35 35. Activité soumise au contrôle de l'ACPR.</code></pre>
+
+  <!-- SITEMAP -->
+  <h1>Sitemap &amp; robots.txt</h1>
+
+  <h2>Pages indexées (pages-sitemap.xml — 12 URLs)</h2>
+  <table>
+    <tr><th>URL</th><th>Dernière modif.</th><th>Statut</th></tr>
+    <tr><td>/</td><td>2026-03-10</td><td><span class="badge badge-pass">OK</span></td></tr>
+    <tr><td>/assurance-auto</td><td>2026-03-10</td><td><span class="badge badge-pass">OK</span></td></tr>
+    <tr><td>/assurance-moto</td><td>2026-03-10</td><td><span class="badge badge-pass">OK</span></td></tr>
+    <tr><td>/assurance-habitation</td><td>2026-03-10</td><td><span class="badge badge-pass">OK</span></td></tr>
+    <tr><td>/mutuelle-sante</td><td>2026-03-10</td><td><span class="badge badge-pass">OK</span></td></tr>
+    <tr><td>/assurance-taxi</td><td>2026-03-10</td><td><span class="badge badge-pass">OK</span></td></tr>
+    <tr><td>/assurance-garage</td><td>2026-03-10</td><td><span class="badge badge-pass">OK</span></td></tr>
+    <tr><td>/prevoyance-professionnelle</td><td>2026-03-10</td><td><span class="badge badge-pass">OK</span></td></tr>
+    <tr><td>/rc-decennale</td><td>2026-03-10</td><td><span class="badge badge-pass">OK</span></td></tr>
+    <tr><td>/autres-produits</td><td>2026-03-10</td><td><span class="badge badge-high">À approfondir</span></td></tr>
+    <tr><td>/blog</td><td>2026-03-10</td><td><span class="badge badge-pass">OK</span></td></tr>
+    <tr><td>/nous-contacter</td><td>2026-03-10</td><td><span class="badge badge-pass">OK</span></td></tr>
+  </table>
+
+  <div class="callout callout-warning">
+    <strong>Pages manquantes dans le sitemap :</strong> Aucune page "À propos/équipe", aucune page de localisation (Créteil, Charenton, etc.), aucune page "mentions légales" (requise légalement). Les blog-sitemaps ont un lastmod périmé : 2025-07-19.
+  </div>
+
+  <!-- FOOTER -->
+  <div class="report-footer">
+    <p>Rapport généré le 25 Avril 2026 · AssurFast (www.assurfast.fr) · Audit Claude Code SEO</p>
+    <p style="margin-top:4px;font-size:11px;color:#999;">Ce rapport est basé sur une analyse publique du site. Certaines métriques sont des estimations en l'absence d'accès aux API Google (GSC, CrUX, GA4). Connecter les API Google via <code>/seo google</code> pour des données en temps réel.</p>
+  </div>
+
+  <div class="community-box">
+    <h3>Skill SEO by agricidaniel</h3>
+    <p>Rejoignez la communauté AI Marketing Hub pour plus d'outils SEO et de ressources</p>
+    <div class="community-links">
+      <a class="community-link free" href="https://www.skool.com/ai-marketing-hub">🆓 Gratuit</a>
+      <a class="community-link pro" href="https://www.skool.com/ai-marketing-hub-pro">⚡ Pro</a>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
