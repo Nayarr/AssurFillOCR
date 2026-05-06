@@ -1,5 +1,12 @@
 import re
 
+# Mots-clés d'en-tête — leur présence indique qu'on est dans la zone titre, pas dans les données
+_HEADER_RE = re.compile(
+    r"PERMIS|CONDUIRE|FRANC[AEH]ISE?|FRAHSAISE|REPUBLIQUE", re.IGNORECASE
+)
+# Préfixes de champs numérotés (3. à 9., 4a, 4b, 5., D1FRA) — stoppent la collecte des noms
+_FIELD_RE = re.compile(r"^[3-9]|^4[a-c]|^5[.\s]|^D1FRA", re.IGNORECASE)
+
 
 def parse(texts: list[str], scores: list[float]) -> dict:
     """
@@ -12,61 +19,155 @@ def parse(texts: list[str], scores: list[float]) -> dict:
         "prenom": None,
         "date_naissance": None,
         "date_expiration": None,
-        "prefecture": None,
         "numero_permis": None,
-        "categories": None,
     }
-    
+
     date_delivre_permis = None
+    past_header = False  # True une fois qu'on a vu les tokens d'en-tête
 
     for i, (text, score) in enumerate(zip(texts, scores)):
         if score < 0.5:
             continue
 
-        # Nom — extrait depuis la ligne MRZ (D1FRA...NOM<)
-        if data["nom"] is None and "<" in text and len(text) > 15:
-            matches = re.findall(r"([A-Z]{2,})<", text)
-            if matches:
-                data["nom"] = matches[-1]
+        t = text.strip()
 
-        # Prénom — champ 2.
-        elif data["prenom"] is None and re.match(r"^2\.", text):
-            s = re.sub(r"^\d+[a-z]?\.\d*\s*", "", text).strip()
+        # ── En-tête (REPUBLIQUE FRANCAISE, PERMIS DE CONDUIRE, variantes OCR)
+        if _HEADER_RE.search(t):
+            past_header = True
+            continue
+
+        # ── Ligne MRZ : D1FRA<NUMERO(9)>...<NOM
+        # Le MRZ est la source la plus fiable pour le nom — il écrase toujours la lecture visuelle.
+        if re.match(r"^D1FRA[A-Z0-9]", t) and len(t) > 10:
+            if data["numero_permis"] is None:
+                m = re.search(r"D1FRA([A-Z0-9]{9})", t)
+                if m:
+                    data["numero_permis"] = m.group(1)
+            if "<" in t:
+                nom_mrz = _extract_nom_mrz(t)
+                if nom_mrz:
+                    data["nom"] = nom_mrz  # priorité absolue sur la lecture visuelle
+
+        # ── Nom — champ 1.
+        elif data["nom"] is None and re.match(r"^1[.\s]", t):
+            # Ignorer les lignes-labels multi-champs : "1.Nom2.Prenom 3.Date..."
+            if re.search(r"[2-6][a-z]?[.\s]", t[2:]):
+                continue
+            s = re.sub(r"^\d+[a-z]?[.\s]\d*\s*", "", t).strip()
+            s = re.sub(r"^[^A-Za-zÀ-ÿ]{1,2}", "", s).strip()
+            s = re.sub(r"[^A-Za-zÀ-ÿ\-']{1,2}$", "", s).strip()
+            data["nom"] = s.upper() or None
+
+        # ── Nom — fallback positionnel (après l'en-tête, avant les champs datés)
+        elif data["nom"] is None and past_header and len(t) > 2 and t.upper() not in {"F", "EU"}:
+            if not _FIELD_RE.match(t) and not _parse_date(t):
+                clean = re.sub(r"^[^A-Za-zÀ-ÿ]{1,2}(?=[A-Za-zÀ-ÿ]{3})", "", t)
+                alpha = len(re.findall(r"[A-Za-zÀ-ÿ]", clean))
+                if alpha >= 3 and alpha / len(clean) >= 0.75:
+                    data["nom"] = re.sub(r"[^A-Za-zÀ-ÿ\-' ]", "", clean).upper() or None
+
+        # ── Prénom — champ 2. (point bien lu ou mal lu comme lettre par OCR)
+        elif data["prenom"] is None and re.match(r"^2[.\s]", t):
+            s = re.sub(r"^\d+[a-z]?[.\s]\d*\s*", "", t).strip()
             s = re.sub(r"^[^A-Za-zÀ-ÿ]{1,2}", "", s).strip()
             s = re.sub(r"[^A-Za-zÀ-ÿ\-']{1,2}$", "", s).strip()
             data["prenom"] = s or None
 
+        elif data["prenom"] is None and re.match(r"^2[A-Z](?=[A-Z]{2,})", t):
+            # OCR a lu "2." comme "2A" (ex : "2ARACHIDA" → prénom "RACHIDA")
+            s = re.sub(r"^2[A-Z]", "", t).strip()
+            s = re.sub(r"[^A-Za-zÀ-ÿ\-']{1,2}$", "", s).strip()
+            data["prenom"] = s or None
 
-        # Date obtention permis — champ 4a.
-        elif date_delivre_permis is None and re.match(r"^4a\.", text):
-            date_delivre_permis = _parse_date(text)
+        # ── Prénom — fallback positionnel (après nom, avant les champs datés)
+        elif (
+            data["nom"] is not None
+            and data["prenom"] is None
+            and past_header
+            and len(t) > 2
+            and t.upper() not in {"F", "EU"}
+            and not re.match(r"^\d", t)
+        ):
+            if not _FIELD_RE.match(t) and not _parse_date(t):
+                clean = re.sub(r"^[^A-Za-zÀ-ÿ]{1,2}(?=[A-Za-zÀ-ÿ]{3})", "", t)
+                alpha = len(re.findall(r"[A-Za-zÀ-ÿ]", clean))
+                if alpha >= 3 and alpha / len(clean) >= 0.6:
+                    data["prenom"] = re.sub(r"[^A-Za-zÀ-ÿ\-' ]", "", clean) or None
 
-        # Date expiration — champ 4b.
-        elif data["date_expiration"] is None and re.match(r"^4b\.", text):
-            data["date_expiration"] = _parse_date(text)
-            
-        # Date naissance — champ 3.
+        # ── Numéro permis — champ 5. (fallback si MRZ absent/illisible)
+        elif data["numero_permis"] is None and re.match(r"^5[.\s]", t):
+            m = re.search(r"([A-Z0-9]{6,12})", t[2:])
+            if m:
+                data["numero_permis"] = m.group(1)
+
+        # ── Date obtention — champ 4a.
+        elif date_delivre_permis is None and re.match(r"^4a[.\s]?", t, re.IGNORECASE) and re.search(r"\d{2}[./]\d{2}[./]\d{4}", t):
+            date_delivre_permis = _parse_date(t)
+
+        # ── Date expiration — champ 4b.
+        elif data["date_expiration"] is None and re.match(r"^4b[.\s]?", t, re.IGNORECASE):
+            d = _parse_date(t)
+            if d:
+                data["date_expiration"] = d
+            else:
+                for j in range(i + 1, min(i + 3, len(texts))):
+                    d = _parse_date(texts[j])
+                    if d:
+                        data["date_expiration"] = d
+                        break
+
+        # ── Date naissance — champ 3. (toute date antérieure à la date d'obtention)
         elif data["date_naissance"] is None:
-            date = _parse_date(text)
+            date = _parse_date(t)
             if date is not None and (date_delivre_permis is None or date < date_delivre_permis):
                 data["date_naissance"] = date
 
-        # Préfecture — champ 4c.
-        elif data["prefecture"] is None and re.match(r"^4c\.", text):
-            data["prefecture"] = re.sub(r"^4c\.", "", text).strip() or None
+    # ── Récupération date expiration si absente (date > date_obtention dans les textes restants)
+    if data["date_expiration"] is None and date_delivre_permis is not None:
+        for t in texts:
+            d = _parse_date(t.strip())
+            if d and d > date_delivre_permis:
+                data["date_expiration"] = d
+                break
 
-        # Numéro permis — champ 5. suivi du numéro dans le bloc suivant
-        elif re.match(r"^5\.?$", text.strip()):
-            if i + 1 < len(texts) and scores[i + 1] >= 0.8:
-                candidate = texts[i + 1].strip()
-                if re.match(r"[A-Z0-9]{7,12}$", candidate):
-                    data["numero_permis"] = candidate
-
-        # Catégories — champ 9.
-        elif data["categories"] is None and re.match(r"^9\.", text):
-            data["categories"] = re.sub(r"^9\.", "", text).strip() or None
+    # ── Normalisation OCR : 1→I et 0→O au sein des noms (confusables fréquents)
+    data["nom"] = _fix_ocr_confusables(data["nom"])
+    data["prenom"] = _fix_ocr_confusables(data["prenom"])
 
     return data
+
+
+def _extract_nom_mrz(mrz: str) -> str | None:
+    """
+    Extrait le nom depuis la ligne MRZ d'un permis FR (format D1FRA...).
+    Gère les noms composés : AIT<IDIR → 'AIT IDIR', AZIRI<<< → 'AZIRI'.
+    Toujours prioritaire sur la lecture visuelle.
+    """
+    # Se positionner après les 20 premiers caractères (D1FRA + n° permis + dates)
+    zone = mrz[20:] if len(mrz) > 20 else mrz
+    # Normaliser 0→O (confusion OCR fréquente dans la zone nom)
+    zone = zone.replace("0", "O")
+    # Isoler la zone nom : lettres majuscules et '<' uniquement
+    zone = re.sub(r"^[^A-Z<]*", "", zone)   # ignorer les chiffres parasites en tête
+    zone = re.sub(r"[^A-Z<].*$", "", zone)   # couper au premier caractère non-lettre non-<
+    if not zone:
+        return None
+    # Séparer nom de famille et prénoms (séparateur '<<')
+    surname_part = zone.split("<<")[0]
+    # Dans la partie nom, '<' = espace (nom composé : AIT<IDIR → AIT IDIR)
+    nom = surname_part.replace("<", " ").strip()
+    return nom or None
+
+
+def _fix_ocr_confusables(s: str | None) -> str | None:
+    """Corrige les confusions chiffre/lettre fréquentes dans les noms OCR."""
+    if s is None:
+        return None
+    # 1 entre deux lettres → I  (AIT1DIR → AITIDIR, mais le MRZ donne AIT IDIR)
+    s = re.sub(r"(?<=[A-Za-z])1(?=[A-Za-z])", "I", s)
+    # 0 entre deux lettres → O  (B0UALI → BOUALI)
+    s = re.sub(r"(?<=[A-Za-z])0(?=[A-Za-z])", "O", s)
+    return s
 
 
 def _parse_date(raw: str) -> str | None:
