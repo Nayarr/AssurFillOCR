@@ -88,14 +88,21 @@ if (Test-Path "$InstallDir\.git") {
 if (-not (Test-Path $VenvDir)) {
   Log "Création de l'environnement virtuel..."
   & $PythonBin -m venv $VenvDir
+  if ($LASTEXITCODE -ne 0) { Err "Echec de la création du venv." }
 }
+if (-not (Test-Path $PythonVenv)) { Err "python.exe introuvable dans le venv : $PythonVenv" }
 
 # ── 5. Dépendances ────────────────────────────────────────────────────────────
 Log "Mise à jour de pip..."
-& $PipVenv install --upgrade pip --quiet
+& $PythonVenv -m pip install --upgrade pip
+if ($LASTEXITCODE -ne 0) { Err "Echec de la mise à jour de pip." }
 
-Log "Installation des paquets (peut prendre plusieurs minutes)..."
-& $PipVenv install flask opencv-python numpy paddlepaddle paddleocr
+$Packages = @("flask", "opencv-python", "numpy", "paddlepaddle", "paddleocr")
+foreach ($pkg in $Packages) {
+  Log "Installation de $pkg..."
+  & $PythonVenv -m pip install $pkg
+  if ($LASTEXITCODE -ne 0) { Err "Echec de l'installation de $pkg." }
+}
 Log "Dépendances installées."
 
 # ── 6. Démarrage automatique (Planificateur de tâches) ───────────────────────
