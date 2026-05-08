@@ -12,11 +12,11 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Push to public repo
         env:
-          GH_TOKEN: ${{ secrets.PUBLIC_REPO_TOKEN }}
+          TOKEN: ${{ secrets.PUBLIC_REPO_TOKEN }}
         run: |
-          gh auth setup-git
-          git remote add public https://github.com/Nayarr/AssurFillOCR.git
+          git remote add public https://x-access-token:${TOKEN}@github.com/Nayarr/AssurFillOCR.git
           git push public main --force
