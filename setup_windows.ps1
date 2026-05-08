@@ -19,7 +19,14 @@ $TaskName     = "AssurFillOCR"
 
 function Log   { Write-Host "[AssurFill] $args" -ForegroundColor Green }
 function Warn  { Write-Host "[WARN]      $args" -ForegroundColor Yellow }
-function Err   { Write-Host "[ERREUR]    $args" -ForegroundColor Red; exit 1 }
+function Err   { Write-Host "[ERREUR]    $args" -ForegroundColor Red; Read-Host "`nAppuyez sur Entree pour fermer"; exit 1 }
+
+# Attrape toutes les exceptions non gérées et les affiche avant de fermer
+trap {
+  Write-Host "`n[ERREUR INATTENDUE] $_" -ForegroundColor Red
+  Read-Host "`nAppuyez sur Entree pour fermer"
+  exit 1
+}
 
 Write-Host ""
 Write-Host "  +==============================+" -ForegroundColor Cyan
@@ -140,3 +147,5 @@ if (Test-Path $HtmlGuide) {
   Log "Ouverture du guide d'installation..."
   Start-Process $HtmlGuide
 }
+
+Read-Host "`nAppuyez sur Entree pour fermer"
