@@ -87,8 +87,13 @@ if (Test-Path "$InstallDir\.git") {
   Log "Dossier existant — mise à jour du dépôt..."
   git -C $InstallDir pull --ff-only
 } else {
+  if (Test-Path $InstallDir) {
+    Log "Dossier existant sans dépôt git — suppression et reclonage..."
+    Remove-Item -Recurse -Force $InstallDir
+  }
   Log "Clonage dans $InstallDir..."
   git clone $RepoUrl $InstallDir
+  if ($LASTEXITCODE -ne 0) { Err "Echec du clonage du dépôt." }
 }
 
 # ── 4. Environnement virtuel ──────────────────────────────────────────────────
