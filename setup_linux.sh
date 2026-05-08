@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # setup_linux.sh — AssurFill OCR : installation Linux
 #
 # Usage :

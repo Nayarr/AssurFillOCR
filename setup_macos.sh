@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # setup_macos.sh — AssurFill OCR : installation macOS
 #
 # Usage :
