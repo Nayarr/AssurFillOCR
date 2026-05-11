@@ -7,10 +7,6 @@ import os
 import sys
 import tempfile
 
-# Bug PaddlePaddle 3.x sur Windows : PIR + oneDNN incompatibles
-# Ces flags doivent être définis avant tout import de paddle
-os.environ["FLAGS_enable_pir_api"] = "0"
-os.environ["FLAGS_use_mkldnn"] = "0"
 
 OCR_DIR = os.path.join(os.path.dirname(__file__), "..", "OCR")
 sys.path.insert(0, OCR_DIR)
@@ -44,6 +40,11 @@ def preflight():
 def _ocr_instance():
     global _ocr
     if _ocr is None:
+        import paddle
+        try:
+            paddle.set_flags({"FLAGS_use_mkldnn": False, "FLAGS_enable_pir_api": False})
+        except Exception:
+            pass
         from paddleocr import PaddleOCR
         _ocr = PaddleOCR(
             text_detection_model_name="PP-OCRv5_mobile_det",
