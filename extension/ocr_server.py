@@ -40,11 +40,6 @@ def preflight():
 def _ocr_instance():
     global _ocr
     if _ocr is None:
-        import paddle
-        try:
-            paddle.set_flags({"FLAGS_use_mkldnn": False, "FLAGS_enable_pir_api": False})
-        except Exception:
-            pass
         from paddleocr import PaddleOCR
         _ocr = PaddleOCR(
             text_detection_model_name="PP-OCRv5_mobile_det",
