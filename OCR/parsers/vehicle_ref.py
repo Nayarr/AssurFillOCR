@@ -110,6 +110,20 @@ def _ressemble_label(chaine: str) -> bool:
     return bool(re.search(r'[a-z]{3,}', chaine)) and len(chaine.split()) >= 2
 
 
+def _extraire_modele_depuis_denomination(denomination: str) -> str | None:
+    """Extrait un modèle connu depuis une dénomination commerciale complexe.
+    Ex: 'TIPO LIFE SEDAN' → 'TIPO', 'NEW BERLINGO 1.6 HDI' → 'BERLINGO'
+    """
+    mots = [m for m in denomination.upper().split() if len(m) >= 3]
+    for mot in mots:
+        if mot in TOUS_MODELES:
+            return mot
+        resultats = get_close_matches(mot, TOUS_MODELES, n=1, cutoff=0.88)
+        if resultats:
+            return resultats[0]
+    return None
+
+
 def fix_marque_modele(donnees: dict) -> None:
     """Corrige marque/modele : normalisation, inversion, déduction, correction floue."""
     score_marque = donnees.pop("_score_marque", 1.0)
@@ -201,9 +215,14 @@ def fix_marque_modele(donnees: dict) -> None:
     if modele_a_valider:
         modele_maj = modele_a_valider.upper()
         if modele_maj not in TOUS_MODELES:
-            # Valeur inconnue (ex: texte parasite "COUPON PEIACHABL") → on efface
-            donnees["modele"] = None
-        elif marque_finale and score_marque >= 0.75:
+            # Dénomination commerciale complexe (ex: "TIPO LIFE SEDAN") → extraire le modèle connu
+            extrait = _extraire_modele_depuis_denomination(modele_a_valider)
+            if extrait:
+                modele_maj = extrait.upper()
+                donnees["modele"] = extrait
+            else:
+                donnees["modele"] = None
+        if modele_maj in TOUS_MODELES and marque_finale and score_marque >= 0.75:
             # Marque connue avec confiance : vérifie que le modele lui appartient
             modeles_marque = {m.upper() for m in _MODELES_BRUTS.get(marque_finale, [])}
             if modeles_marque and modele_maj not in modeles_marque:
