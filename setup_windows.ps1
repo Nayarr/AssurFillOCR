@@ -119,7 +119,7 @@ Log "Enregistrement du démarrage automatique..."
 $Action   = New-ScheduledTaskAction -Execute $PythonVenvW -Argument $ServerScript
 $Trigger  = New-ScheduledTaskTrigger -AtLogon
 $Settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Seconds 0) -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1)
-$Principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -RunLevel Highest
+$Principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -RunLevel Limited
 
 Register-ScheduledTask `
   -TaskName  $TaskName `
