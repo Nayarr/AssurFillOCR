@@ -24,7 +24,8 @@ def parse(texts: list[str], scores: list[float]) -> dict:
 
     date_delivre_permis = None
     past_header = False  # True une fois qu'on a vu les tokens d'en-tête
-    mrz_nom = None  # Nom extrait du MRZ (pour la vérification d'artefacts A/M)
+    mrz_nom = None     # Nom complet extrait du MRZ (quand '<' présent)
+    mrz_prefix = None  # Préfixe du nom MRZ (pour correction artefact en début)
 
     for i, (text, score) in enumerate(zip(texts, scores)):
         if score < 0.5:
@@ -43,6 +44,9 @@ def parse(texts: list[str], scores: list[float]) -> dict:
                 m = re.search(r"D1FRA([A-Z0-9]{9})", t)
                 if m:
                     data["numero_permis"] = m.group(1)
+            _pref = _extract_mrz_name_prefix(t)
+            if _pref:
+                mrz_prefix = _pref
             if "<" in t:
                 _extrait = _extract_nom_mrz(t)
                 if _extrait:
@@ -142,10 +146,15 @@ def parse(texts: list[str], scores: list[float]) -> dict:
                 data["date_expiration"] = d
                 break
 
-    # ── Correction artefacts A/M : si recto = MRZ avec un 'A' ou 'M' en trop
-    # au début et/ou en fin, le MRZ est plus fiable → on le préfère.
+    # ── Correction artefacts A/M via MRZ
     if data["nom"] is not None and mrz_nom is not None and data["nom"].upper() != mrz_nom.upper():
+        # Nom MRZ complet disponible : vérification début et/ou fin
         correction = _artefact_am(data["nom"], mrz_nom)
+        if correction is not None:
+            data["nom"] = correction
+    elif data["nom"] is not None and mrz_nom is None and mrz_prefix is not None:
+        # Pas de '<' dans le MRZ : vérification du début seulement via le préfixe
+        correction = _artefact_am_debut(data["nom"], mrz_prefix)
         if correction is not None:
             data["nom"] = correction
 
@@ -170,6 +179,28 @@ def _extract_nom_mrz(mrz: str) -> str | None:
     surname_part = zone.split("<<")[0]
     nom = surname_part.replace("<", " ").strip()
     return nom or None
+
+
+def _extract_mrz_name_prefix(mrz: str, min_len: int = 4) -> str | None:
+    """Extrait le préfixe alphabétique du nom dans la zone MRZ (position 20+)."""
+    zone = mrz[20:] if len(mrz) > 20 else mrz
+    zone = re.sub(r"0", "O", zone)
+    zone = re.sub(r"^[^A-Z]+", "", zone)
+    m = re.match(r"([A-Z]+)", zone)
+    prefix = m.group(1) if m else ""
+    return prefix if len(prefix) >= min_len else None
+
+
+def _artefact_am_debut(nom_recto: str, mrz_prefix: str) -> str | None:
+    """
+    Supprime un 'A' ou 'M' artéfact en début de nom_recto si recto[1:]
+    commence par le préfixe MRZ (MRZ sans '<', vérification début uniquement).
+    """
+    r = nom_recto.upper().strip()
+    p = mrz_prefix.upper().strip()
+    if r and r[0] in "AM" and r[1:].startswith(p):
+        return nom_recto[1:]
+    return None
 
 
 def _artefact_am(nom_recto: str, nom_mrz: str) -> str | None:
