@@ -24,6 +24,7 @@ def parse(texts: list[str], scores: list[float]) -> dict:
 
     date_delivre_permis = None
     past_header = False  # True une fois qu'on a vu les tokens d'en-tête
+    mrz_nom = None  # Nom extrait du MRZ (pour la vérification d'artefacts A/M)
 
     for i, (text, score) in enumerate(zip(texts, scores)):
         if score < 0.5:
@@ -37,16 +38,17 @@ def parse(texts: list[str], scores: list[float]) -> dict:
             continue
 
         # ── Ligne MRZ : D1FRA<NUMERO(9)>...<NOM<<
-        # Le MRZ est la source la plus fiable pour le nom — il écrase toujours la lecture visuelle.
         if re.match(r"^D1FRA[A-Z0-9]", t) and len(t) > 10:
             if data["numero_permis"] is None:
                 m = re.search(r"D1FRA([A-Z0-9]{9})", t)
                 if m:
                     data["numero_permis"] = m.group(1)
             if "<" in t:
-                nom_mrz = _extract_nom_mrz(t)
-                if nom_mrz:
-                    data["nom"] = nom_mrz  # priorité absolue sur la lecture visuelle
+                _extrait = _extract_nom_mrz(t)
+                if _extrait:
+                    mrz_nom = _extrait
+                    if data["nom"] is None:
+                        data["nom"] = mrz_nom
 
         # ── Nom — champ 1.
         elif data["nom"] is None and re.match(r"^1[.\s]", t):
@@ -140,6 +142,13 @@ def parse(texts: list[str], scores: list[float]) -> dict:
                 data["date_expiration"] = d
                 break
 
+    # ── Correction artefacts A/M : si recto = MRZ avec un 'A' ou 'M' en trop
+    # au début et/ou en fin, le MRZ est plus fiable → on le préfère.
+    if data["nom"] is not None and mrz_nom is not None and data["nom"].upper() != mrz_nom.upper():
+        correction = _artefact_am(data["nom"], mrz_nom)
+        if correction is not None:
+            data["nom"] = correction
+
     # ── Normalisation OCR : 1→I et 0→O au sein des noms (confusables fréquents)
     data["nom"] = _fix_ocr_confusables(data["nom"])
     data["prenom"] = _fix_ocr_confusables(data["prenom"])
@@ -151,7 +160,6 @@ def _extract_nom_mrz(mrz: str) -> str | None:
     """
     Extrait le nom depuis la ligne MRZ d'un permis FR (format D1FRA...).
     Gère les noms composés : AIT<IDIR → 'AIT IDIR', AZIRI<<< → 'AZIRI'.
-    Toujours prioritaire sur la lecture visuelle.
     """
     zone = mrz[20:] if len(mrz) > 20 else mrz
     zone = zone.replace("0", "O")
@@ -162,6 +170,26 @@ def _extract_nom_mrz(mrz: str) -> str | None:
     surname_part = zone.split("<<")[0]
     nom = surname_part.replace("<", " ").strip()
     return nom or None
+
+
+def _artefact_am(nom_recto: str, nom_mrz: str) -> str | None:
+    """
+    Retourne nom_mrz si nom_recto == nom_mrz après suppression d'un 'A' ou 'M'
+    artéfact au début et/ou en fin (une seule lettre par côté au maximum).
+    """
+    r, m = nom_recto.upper().strip(), nom_mrz.upper().strip()
+    for strip_start in (0, 1):
+        for strip_end in (0, 1):
+            if strip_start == 0 and strip_end == 0:
+                continue
+            if strip_start and (not r or r[0] not in "AM"):
+                continue
+            if strip_end and (not r or r[-1] not in "AM"):
+                continue
+            candidate = r[strip_start: len(r) - strip_end if strip_end else len(r)]
+            if candidate == m:
+                return nom_mrz
+    return None
 
 
 def _fix_ocr_confusables(s: str | None) -> str | None:
