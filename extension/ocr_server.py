@@ -7,6 +7,10 @@ import os
 import sys
 import tempfile
 
+# Désactive oneDNN — bug connu PaddlePaddle sur Windows
+os.environ.setdefault("FLAGS_use_mkldnn", "0")
+os.environ.setdefault("PADDLE_DISABLE_MKLDNN", "1")
+
 OCR_DIR = os.path.join(os.path.dirname(__file__), "..", "OCR")
 sys.path.insert(0, OCR_DIR)
 
