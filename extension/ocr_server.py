@@ -7,6 +7,7 @@ import os
 import sys
 import tempfile
 
+
 OCR_DIR = os.path.join(os.path.dirname(__file__), "..", "OCR")
 sys.path.insert(0, OCR_DIR)
 
