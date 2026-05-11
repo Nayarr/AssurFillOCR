@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      width: 340px;
+      font-family: system-ui, -apple-system, sans-serif;
+      font-size: 13px;
+      color: #1e293b;
+      background: #f8fafc;
+    }
+
+    #header {
+      padding: 12px 16px;
+      background: #2563eb;
+      color: #fff;
+      font-weight: 700;
+      font-size: 14px;
+    }
+
+    #drop-zone {
+      margin: 12px;
+      border: 2px dashed #cbd5e1;
+      border-radius: 10px;
+      padding: 24px 12px;
+      text-align: center;
+      cursor: pointer;
+      background: #fff;
+      transition: border-color .15s, background .15s;
+    }
+    #drop-zone:hover,
+    #drop-zone.drag-over { border-color: #2563eb; background: #eff6ff; }
+
+    #drop-zone input[type=file] { display: none; }
+
+    #drop-icon { font-size: 28px; margin-bottom: 6px; }
+    #drop-label { font-weight: 600; color: #475569; margin-bottom: 4px; }
+    #drop-hint { font-size: 11px; color: #94a3b8; }
+
+    #thumbs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      padding: 0 12px 4px;
+    }
+
+    .thumb {
+      position: relative;
+      width: 60px;
+      height: 60px;
+    }
+    .thumb img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      border-radius: 6px;
+      border: 1px solid #e2e8f0;
+    }
+    .thumb-remove {
+      position: absolute;
+      top: -5px;
+      right: -5px;
+      width: 16px;
+      height: 16px;
+      background: #ef4444;
+      color: #fff;
+      border: none;
+      border-radius: 50%;
+      font-size: 10px;
+      line-height: 16px;
+      text-align: center;
+      cursor: pointer;
+      padding: 0;
+    }
+
+    #actions { padding: 8px 12px 12px; }
+
+    #btn-lancer {
+      width: 100%;
+      padding: 9px;
+      background: #2563eb;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-weight: 700;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    #btn-lancer:disabled { background: #94a3b8; cursor: not-allowed; }
+    #btn-lancer:not(:disabled):hover { background: #1d4ed8; }
+
+    #error {
+      margin: 0 12px 10px;
+      padding: 8px 10px;
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      border-radius: 6px;
+      font-size: 11px;
+      color: #dc2626;
+      white-space: pre-line;
+      line-height: 1.5;
+      display: none;
+    }
+
+    #result {
+      margin: 0 12px 10px;
+      background: #fff;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      overflow: hidden;
+      display: none;
+    }
+
+    .section-title {
+      padding: 5px 10px;
+      background: #f1f5f9;
+      font-size: 10px;
+      font-weight: 700;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+    }
+    .result-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 4px 10px;
+      border-top: 1px solid #f1f5f9;
+    }
+    .rk { color: #64748b; }
+    .rv { font-weight: 600; text-align: right; max-width: 190px; word-break: break-all; }
+    .rv.null  { color: #ef4444; font-style: italic; font-weight: 400; }
+    .rv.warn  { color: #f97316; }
+
+    #btn-injecter {
+      display: none;
+      width: calc(100% - 24px);
+      margin: 0 12px 12px;
+      padding: 9px;
+      background: #16a34a;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-weight: 700;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    #btn-injecter:hover { background: #15803d; }
+
+    #status {
+      margin: -4px 12px 12px;
+      font-size: 11px;
+      color: #16a34a;
+      text-align: center;
+      display: none;
+    }
+
+    #btn-reset {
+      display: none;
+      width: calc(100% - 24px);
+      margin: 0 12px 12px;
+      padding: 7px;
+      background: transparent;
+      color: #64748b;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    #btn-reset:hover { background: #f1f5f9; }
+
+    #phone-section {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      background: #fff;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    #phone-section label {
+      font-size: 11px;
+      font-weight: 600;
+      color: #64748b;
+      white-space: nowrap;
+    }
+    #phone-section input {
+      flex: 1;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      padding: 5px 8px;
+      font-size: 12px;
+      outline: none;
+      color: #1e293b;
+    }
+    #phone-section input:focus { border-color: #2563eb; }
+  </style>
+</head>
+<body>
+  <div id="header">&#128203; AssurFill OCR</div>
+
+  <div id="phone-section">
+    <label for="user-phone">&#128222; Téléphone</label>
+    <input type="tel" id="user-phone" placeholder="06 00 00 00 00">
+  </div>
+
+  <div id="drop-zone">
+    <input type="file" id="file-input" accept="image/*" multiple>
+    <div id="drop-icon">&#128444;</div>
+    <div id="drop-label">Glissez vos documents ici</div>
+    <div id="drop-hint">Permis (recto/verso) + carte grise — ordre libre</div>
+  </div>
+
+  <div id="thumbs"></div>
+
+  <div id="actions">
+    <button id="btn-lancer" disabled>Lancer l'analyse</button>
+  </div>
+
+  <div id="error"></div>
+  <div id="result"></div>
+  <button id="btn-injecter">&#128203; Injecter dans le formulaire</button>
+  <div id="status"></div>
+  <button id="btn-reset">&#8592; Nouvelle analyse</button>
+
+  <script src="popup.js"></script>
+</body>
+</html>

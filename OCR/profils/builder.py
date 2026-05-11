@@ -104,7 +104,7 @@ def _profil_permis_dz(recto: dict, verso: dict) -> tuple[dict, list[dict]]:
         "numero_permis": numero_permis,
         "pays_permis": "DZ",
         "date_expiration_permis": date_expiration,
-        "obtention_B": None,
+        "obtention_B": verso.get("obtention_B"),
     }, conflits
 
 

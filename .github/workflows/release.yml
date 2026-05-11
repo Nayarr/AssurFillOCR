@@ -1,0 +1,86 @@
+name: Build & Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+
+  # ── macOS : shc compile setup_macos.sh → binaire ──────────────────────────
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Installer shc
+        run: brew install shc
+
+      - name: Compiler setup_macos.sh
+        run: shc -f setup_macos.sh -o setup_macos
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: setup_macos
+          path: setup_macos
+
+  # ── Linux : shc compile setup_linux.sh → binaire ──────────────────────────
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Installer shc
+        run: sudo apt-get install -y shc
+
+      - name: Compiler setup_linux.sh
+        run: shc -f setup_linux.sh -o setup_linux
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: setup_linux
+          path: setup_linux
+
+  # ── Windows : ps2exe compile setup_windows.ps1 → .exe ─────────────────────
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Installer ps2exe
+        shell: pwsh
+        run: Install-Module -Name ps2exe -Scope CurrentUser -Force
+
+      - name: Compiler setup_windows.ps1
+        shell: pwsh
+        run: Invoke-ps2exe .\setup_windows.ps1 .\setup_windows.exe
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: setup_windows
+          path: setup_windows.exe
+
+  # ── Créer la release GitHub avec les 3 binaires ───────────────────────────
+  release:
+    needs: [build-macos, build-linux, build-windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Télécharger les artifacts
+        uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+          path: dist/
+
+      - name: Créer la release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/setup_macos
+            dist/setup_linux
+            dist/setup_windows.exe
+          generate_release_notes: true

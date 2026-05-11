@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AssurFill — Guide d'installation</title>
+  <link rel="stylesheet" href="install.css">
+</head>
+<body>
+<div class="page">
+
+  <header>
+    <div class="logo">
+      <div class="logo-icon">⚡</div>
+      <span class="logo-name">AssurFill</span>
+    </div>
+    <p>Guide d'installation — extension Chrome + serveur OCR local</p>
+  </header>
+
+  <nav class="steps-nav">
+    <a class="step-pill" href="#prereqs">Prérequis</a>
+    <a class="step-pill" href="#install">1. Installation</a>
+    <a class="step-pill" href="#chrome">2. Extension Chrome</a>
+    <a class="step-pill" href="#usage">3. Utilisation</a>
+    <a class="step-pill" href="#troubleshoot">Dépannage</a>
+  </nav>
+
+  <!-- Prérequis -->
+  <section id="prereqs">
+    <div class="section-header">
+      <div class="step-badge">✦</div>
+      <h2>Prérequis</h2>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Outil</th>
+          <th>Version minimale</th>
+          <th>Vérification</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>git</strong></td>
+          <td>n'importe laquelle</td>
+          <td><code>git --version</code></td>
+        </tr>
+        <tr>
+          <td><strong>Python</strong></td>
+          <td>3.10+</td>
+          <td><code>python3 --version</code></td>
+        </tr>
+        <tr>
+          <td><strong>Google Chrome</strong></td>
+          <td>n'importe laquelle</td>
+          <td>—</td>
+        </tr>
+        <tr>
+          <td><strong>Node.js</strong> <em>(optionnel)</em></td>
+          <td>18+</td>
+          <td>uniquement pour le formulaire de test local</td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="callout warn">
+      <span class="callout-icon">⚠️</span>
+      <div>
+        <p><strong>Windows :</strong> le script ne tourne pas nativement sur Windows.</p>
+        <p>Installez d'abord <a href="https://git-scm.com/download/win" target="_blank">Git for Windows</a> (cochez <em>Git Bash</em> pendant l'installation), puis lancez le script depuis <strong>Git Bash</strong>. Python et les autres dépendances seront installés automatiquement ensuite.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Étape 1 -->
+  <section id="install">
+    <div class="section-header">
+      <div class="step-badge">1</div>
+      <h2>Lancer le script d'installation</h2>
+    </div>
+    <p>Télécharger et exécuter <code>setup.sh</code> en une commande :</p>
+    <div class="code-block">
+      <div class="code-block-header">
+        <span>bash</span>
+        <button class="copy-btn" onclick="copyCode(this)">Copier</button>
+      </div>
+      <pre>curl -fsSL https://raw.githubusercontent.com/Nayarr/AssurFillOCR/main/setup.sh | bash</pre>
+    </div>
+    <p>Ou, si vous avez déjà cloné le dépôt :</p>
+    <div class="code-block">
+      <div class="code-block-header">
+        <span>bash</span>
+        <button class="copy-btn" onclick="copyCode(this)">Copier</button>
+      </div>
+      <pre>bash setup.sh</pre>
+    </div>
+    <p>Le script :</p>
+    <ul>
+      <li>clone le dépôt dans <code>~/AssurFill</code></li>
+      <li>crée un environnement virtuel Python isolé</li>
+      <li>installe <code>flask</code>, <code>opencv-python</code>, <code>numpy</code>, <code>paddlepaddle</code>, <code>paddleocr</code></li>
+      <li>enregistre le serveur OCR comme service système (<code>launchd</code> sur macOS, <code>systemd</code> sur Linux) pour qu'il démarre automatiquement à chaque connexion</li>
+    </ul>
+    <div class="callout note">
+      <span class="callout-icon">ℹ️</span>
+      <div>
+        <p>Le téléchargement des paquets peut prendre plusieurs minutes <strong>(~1 Go au total)</strong>.</p>
+        <p>Au <strong>premier appel</strong> (première image analysée après installation), PaddleOCR télécharge ses modèles. C'est normal, ça ne se produit qu'une seule fois.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Étape 2 -->
+  <section id="chrome">
+    <div class="section-header">
+      <div class="step-badge">2</div>
+      <h2>Charger l'extension dans Chrome</h2>
+    </div>
+    <ol>
+      <li>Ouvrir Chrome → <code>chrome://extensions</code></li>
+      <li>Activer le <strong>mode développeur</strong> (interrupteur en haut à droite)</li>
+      <li>Cliquer <strong>"Charger l'extension non empaquetée"</strong></li>
+      <li>Sélectionner le dossier <code>~/AssurFill/extension</code></li>
+    </ol>
+    <p style="margin-top:14px;">L'icône AssurFill apparaît dans la barre d'outils Chrome.</p>
+  </section>
+
+  <!-- Étape 3 -->
+  <section id="usage">
+    <div class="section-header">
+      <div class="step-badge">3</div>
+      <h2>Utiliser l'extension</h2>
+    </div>
+    <ol>
+      <li>Naviguer sur le formulaire de devis cible</li>
+      <li>Cliquer sur l'icône AssurFill dans Chrome</li>
+      <li>Déposer les photos du permis de conduire et/ou de la carte grise (recto/verso)</li>
+      <li>Cliquer <strong>"Lancer l'analyse"</strong> — le serveur OCR traite les images (~5-15 secondes)</li>
+      <li>Cliquer <strong>"Injecter"</strong> pour remplir le formulaire automatiquement</li>
+    </ol>
+  </section>
+
+  <!-- Dépannage -->
+  <section id="troubleshoot">
+    <div class="section-header">
+      <div class="step-badge" style="background:var(--border);color:var(--muted)">?</div>
+      <h2>Résolution de problèmes</h2>
+    </div>
+
+    <div class="subsection">
+      <h3>"Impossible de joindre le serveur OCR"</h3>
+      <p>Le service n'a pas démarré. Vérifier son état :</p>
+      <div class="code-block">
+        <div class="code-block-header">
+          <span>bash</span>
+          <button class="copy-btn" onclick="copyCode(this)">Copier</button>
+        </div>
+        <pre><span style="color:var(--muted)"># macOS</span>
+launchctl list | grep assurfill
+
+<span style="color:var(--muted)"># Linux</span>
+systemctl --user status assurfill-ocr</pre>
+      </div>
+      <p>Pour le démarrer manuellement :</p>
+      <div class="code-block">
+        <div class="code-block-header">
+          <span>bash</span>
+          <button class="copy-btn" onclick="copyCode(this)">Copier</button>
+        </div>
+        <pre>~/AssurFill/.venv/bin/python ~/AssurFill/extension/ocr_server.py</pre>
+      </div>
+    </div>
+
+    <div class="subsection">
+      <h3>Le bouton "Injecter" ne remplit rien</h3>
+      <p>S'assurer que l'onglet actif contient bien le formulaire cible et que la page est entièrement chargée.</p>
+    </div>
+
+    <div class="subsection">
+      <h3>Relancer le script après une mise à jour</h3>
+      <p><code>setup.sh</code> est idempotent : le relancer met à jour le dépôt et réinstalle le service proprement.</p>
+      <div class="code-block">
+        <div class="code-block-header">
+          <span>bash</span>
+          <button class="copy-btn" onclick="copyCode(this)">Copier</button>
+        </div>
+        <pre>bash ~/AssurFill/setup.sh</pre>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<script>
+  function copyCode(btn) {
+    const pre = btn.closest('.code-block').querySelector('pre');
+    const text = pre.innerText;
+    navigator.clipboard.writeText(text).then(() => {
+      btn.textContent = 'Copié !';
+      btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = 'Copier'; btn.classList.remove('copied'); }, 2000);
+    });
+  }
+</script>
+</body>
+</html>
