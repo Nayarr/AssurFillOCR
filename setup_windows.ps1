@@ -1,11 +1,11 @@
 # setup_windows.ps1 — AssurFill OCR : installation Windows
 #
 # Usage :
-#   .\setup_windows.ps1                   installe dans ~\AssurFill (défaut)
-#   .\setup_windows.ps1 -InstallDir C:\AssurFill
+#   .\setup_windows.ps1                      installe dans ~\AssurFillOCR (défaut)
+#   .\setup_windows.ps1 -InstallDir C:\AssurFillOCR
 
 param(
-  [string]$InstallDir = "$env:USERPROFILE\AssurFill"
+  [string]$InstallDir = "$env:USERPROFILE\AssurFillOCR"
 )
 
 $ErrorActionPreference = "Stop"

@@ -2,13 +2,13 @@
 # setup_linux.sh — AssurFill OCR : installation Linux
 #
 # Usage :
-#   bash setup_linux.sh            installe dans ~/AssurFill (défaut)
-#   bash setup_linux.sh /mon/path  installe dans le chemin indiqué
+#   bash setup_linux.sh               installe dans ~/AssurFillOCR (défaut)
+#   bash setup_linux.sh /mon/path     installe dans le chemin indiqué
 
 set -euo pipefail
 
 REPO_URL="https://github.com/Nayarr/AssurFillOCR"
-INSTALL_DIR="${1:-$HOME/AssurFill}"
+INSTALL_DIR="${1:-$HOME/AssurFillOCR}"
 VENV_DIR="$INSTALL_DIR/.venv"
 SERVER_SCRIPT="$INSTALL_DIR/extension/ocr_server.py"
 PYTHON_MIN_MINOR=10
