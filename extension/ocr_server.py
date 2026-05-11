@@ -7,9 +7,10 @@ import os
 import sys
 import tempfile
 
-# Désactive oneDNN — bug connu PaddlePaddle sur Windows
-os.environ.setdefault("FLAGS_use_mkldnn", "0")
-os.environ.setdefault("PADDLE_DISABLE_MKLDNN", "1")
+# Bug PaddlePaddle 3.x sur Windows : PIR + oneDNN incompatibles
+# Ces flags doivent être définis avant tout import de paddle
+os.environ["FLAGS_enable_pir_api"] = "0"
+os.environ["FLAGS_use_mkldnn"] = "0"
 
 OCR_DIR = os.path.join(os.path.dirname(__file__), "..", "OCR")
 sys.path.insert(0, OCR_DIR)
