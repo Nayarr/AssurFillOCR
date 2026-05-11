@@ -105,11 +105,17 @@ Log "Mise à jour de pip..."
 & $PythonVenv -m pip install --upgrade pip
 if ($LASTEXITCODE -ne 0) { Err "Echec de la mise à jour de pip." }
 
-$Packages = @("flask", "opencv-python", "numpy", "paddleocr")
-# paddlepaddle doit venir de l'index officiel Paddle — la version PyPI (3.3.0) a un bug oneDNN sur Windows
+# paddlepaddle 3.3.x a un bug oneDNN sur Windows — version 3.2.0 depuis l'index officiel obligatoire
 Log "Installation de paddlepaddle 3.2.0 (index officiel Paddle)..."
 & $PythonVenv -m pip install paddlepaddle==3.2.0 -i https://www.paddlepaddle.org.cn/packages/stable/cpu/
 if ($LASTEXITCODE -ne 0) { Err "Echec de l'installation de paddlepaddle." }
+
+# numpy 2.4+ est incompatible avec paddlex
+Log "Installation de numpy compatible..."
+& $PythonVenv -m pip install "numpy<2.4" -q
+if ($LASTEXITCODE -ne 0) { Err "Echec de l'installation de numpy." }
+
+$Packages = @("flask", "opencv-python", "paddleocr")
 foreach ($pkg in $Packages) {
   Log "Installation de $pkg..."
   & $PythonVenv -m pip install $pkg
