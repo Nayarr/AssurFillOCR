@@ -89,8 +89,11 @@ if (Test-Path $InstallDir) {
   Remove-Item -Recurse -Force $InstallDir
 }
 Log "Clonage dans $InstallDir..."
-git clone $RepoUrl $InstallDir
-if ($LASTEXITCODE -ne 0) { Err "Echec du clonage. Vérifiez votre connexion internet." }
+$ErrorActionPreference = "Continue"
+git clone $RepoUrl $InstallDir 2>&1 | Out-Host
+$cloneExit = $LASTEXITCODE
+$ErrorActionPreference = "Stop"
+if ($cloneExit -ne 0) { Err "Echec du clonage. Vérifiez votre connexion internet." }
 
 # ── 4. Environnement virtuel ──────────────────────────────────────────────────
 if (-not (Test-Path $VenvDir)) {
