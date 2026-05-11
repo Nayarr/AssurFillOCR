@@ -13,6 +13,7 @@ $ErrorActionPreference = "Stop"
 $RepoUrl      = "https://github.com/Nayarr/AssurFillOCR"
 $VenvDir      = "$InstallDir\.venv"
 $PythonVenv   = "$VenvDir\Scripts\python.exe"
+$PythonVenvW  = "$VenvDir\Scripts\pythonw.exe"
 $PipVenv      = "$VenvDir\Scripts\pip.exe"
 $ServerScript = "$InstallDir\extension\ocr_server.py"
 $TaskName     = "AssurFillOCR"
@@ -82,19 +83,14 @@ if (-not $PythonBin) {
 }
 Log "Python : $(& $PythonBin --version)"
 
-# ── 3. Cloner / mettre à jour ─────────────────────────────────────────────────
-if (Test-Path "$InstallDir\.git") {
-  Log "Dossier existant — mise à jour du dépôt..."
-  git -C $InstallDir pull --ff-only
-} else {
-  if (Test-Path $InstallDir) {
-    Log "Dossier existant sans dépôt git — suppression et reclonage..."
-    Remove-Item -Recurse -Force $InstallDir
-  }
-  Log "Clonage dans $InstallDir..."
-  git clone $RepoUrl $InstallDir
-  if ($LASTEXITCODE -ne 0) { Err "Echec du clonage du dépôt." }
+# ── 3. Cloner le dépôt ───────────────────────────────────────────────────────
+if (Test-Path $InstallDir) {
+  Log "Suppression du dossier existant..."
+  Remove-Item -Recurse -Force $InstallDir
 }
+Log "Clonage dans $InstallDir..."
+git clone $RepoUrl $InstallDir
+if ($LASTEXITCODE -ne 0) { Err "Echec du clonage. Vérifiez votre connexion internet." }
 
 # ── 4. Environnement virtuel ──────────────────────────────────────────────────
 if (-not (Test-Path $VenvDir)) {
@@ -120,7 +116,7 @@ Log "Dépendances installées."
 # ── 6. Démarrage automatique (Planificateur de tâches) ───────────────────────
 Log "Enregistrement du démarrage automatique..."
 
-$Action   = New-ScheduledTaskAction -Execute $PythonVenv -Argument $ServerScript
+$Action   = New-ScheduledTaskAction -Execute $PythonVenvW -Argument $ServerScript
 $Trigger  = New-ScheduledTaskTrigger -AtLogon
 $Settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Seconds 0) -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1)
 $Principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -RunLevel Highest
