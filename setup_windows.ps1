@@ -90,7 +90,7 @@ if (Test-Path $InstallDir) {
 }
 Log "Clonage dans $InstallDir..."
 $ErrorActionPreference = "Continue"
-git clone $RepoUrl $InstallDir 2>&1 | Out-Host
+git clone $RepoUrl $InstallDir
 $cloneExit = $LASTEXITCODE
 $ErrorActionPreference = "Stop"
 if ($cloneExit -ne 0) { Err "Echec du clonage. Vérifiez votre connexion internet." }
