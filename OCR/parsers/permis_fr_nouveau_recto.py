@@ -24,6 +24,8 @@ def parse(texts: list[str], scores: list[float]) -> dict:
 
     date_delivre_permis = None
     past_header = False  # True une fois qu'on a vu les tokens d'en-tête
+    mrz_nom = None     # Nom complet extrait du MRZ (quand '<' présent)
+    mrz_prefix = None  # Préfixe du nom MRZ (pour correction artefact en début)
 
     for i, (text, score) in enumerate(zip(texts, scores)):
         if score < 0.5:
@@ -37,16 +39,20 @@ def parse(texts: list[str], scores: list[float]) -> dict:
             continue
 
         # ── Ligne MRZ : D1FRA<NUMERO(9)>...<NOM<<
-        # Le MRZ est la source la plus fiable pour le nom — il écrase toujours la lecture visuelle.
         if re.match(r"^D1FRA[A-Z0-9]", t) and len(t) > 10:
             if data["numero_permis"] is None:
                 m = re.search(r"D1FRA([A-Z0-9]{9})", t)
                 if m:
                     data["numero_permis"] = m.group(1)
+            _pref = _extract_mrz_name_prefix(t)
+            if _pref:
+                mrz_prefix = _pref
             if "<" in t:
-                nom_mrz = _extract_nom_mrz(t)
-                if nom_mrz:
-                    data["nom"] = nom_mrz  # priorité absolue sur la lecture visuelle
+                _extrait = _extract_nom_mrz(t)
+                if _extrait:
+                    mrz_nom = _extrait
+                    if data["nom"] is None:
+                        data["nom"] = mrz_nom
 
         # ── Nom — champ 1.
         elif data["nom"] is None and re.match(r"^1[.\s]", t):
@@ -140,6 +146,18 @@ def parse(texts: list[str], scores: list[float]) -> dict:
                 data["date_expiration"] = d
                 break
 
+    # ── Correction artefacts A/M via MRZ
+    if data["nom"] is not None and mrz_nom is not None and data["nom"].upper() != mrz_nom.upper():
+        # Nom MRZ complet disponible : vérification début et/ou fin
+        correction = _artefact_am(data["nom"], mrz_nom)
+        if correction is not None:
+            data["nom"] = correction
+    elif data["nom"] is not None and mrz_nom is None and mrz_prefix is not None:
+        # Pas de '<' dans le MRZ : vérification du début seulement via le préfixe
+        correction = _artefact_am_debut(data["nom"], mrz_prefix)
+        if correction is not None:
+            data["nom"] = correction
+
     # ── Normalisation OCR : 1→I et 0→O au sein des noms (confusables fréquents)
     data["nom"] = _fix_ocr_confusables(data["nom"])
     data["prenom"] = _fix_ocr_confusables(data["prenom"])
@@ -151,7 +169,6 @@ def _extract_nom_mrz(mrz: str) -> str | None:
     """
     Extrait le nom depuis la ligne MRZ d'un permis FR (format D1FRA...).
     Gère les noms composés : AIT<IDIR → 'AIT IDIR', AZIRI<<< → 'AZIRI'.
-    Toujours prioritaire sur la lecture visuelle.
     """
     zone = mrz[20:] if len(mrz) > 20 else mrz
     zone = zone.replace("0", "O")
@@ -162,6 +179,48 @@ def _extract_nom_mrz(mrz: str) -> str | None:
     surname_part = zone.split("<<")[0]
     nom = surname_part.replace("<", " ").strip()
     return nom or None
+
+
+def _extract_mrz_name_prefix(mrz: str, min_len: int = 4) -> str | None:
+    """Extrait le préfixe alphabétique du nom dans la zone MRZ (position 20+)."""
+    zone = mrz[20:] if len(mrz) > 20 else mrz
+    zone = re.sub(r"0", "O", zone)
+    zone = re.sub(r"^[^A-Z]+", "", zone)
+    m = re.match(r"([A-Z]+)", zone)
+    prefix = m.group(1) if m else ""
+    return prefix if len(prefix) >= min_len else None
+
+
+def _artefact_am_debut(nom_recto: str, mrz_prefix: str) -> str | None:
+    """
+    Supprime un 'A' ou 'M' artéfact en début de nom_recto si recto[1:]
+    commence par le préfixe MRZ (MRZ sans '<', vérification début uniquement).
+    """
+    r = nom_recto.upper().strip()
+    p = mrz_prefix.upper().strip()
+    if r and r[0] in "AM" and r[1:].startswith(p):
+        return nom_recto[1:]
+    return None
+
+
+def _artefact_am(nom_recto: str, nom_mrz: str) -> str | None:
+    """
+    Retourne nom_mrz si nom_recto == nom_mrz après suppression d'un 'A' ou 'M'
+    artéfact au début et/ou en fin (une seule lettre par côté au maximum).
+    """
+    r, m = nom_recto.upper().strip(), nom_mrz.upper().strip()
+    for strip_start in (0, 1):
+        for strip_end in (0, 1):
+            if strip_start == 0 and strip_end == 0:
+                continue
+            if strip_start and (not r or r[0] not in "AM"):
+                continue
+            if strip_end and (not r or r[-1] not in "AM"):
+                continue
+            candidate = r[strip_start: len(r) - strip_end if strip_end else len(r)]
+            if candidate == m:
+                return nom_mrz
+    return None
 
 
 def _fix_ocr_confusables(s: str | None) -> str | None:
