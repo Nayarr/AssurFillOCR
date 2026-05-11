@@ -130,6 +130,12 @@ document.getElementById('btn-lancer').addEventListener('click', async () => {
 });
 
 // ── Afficher résultat ──────────────────────────────────────────────────────
+function artefactAM(val) {
+  if (!val) return false;
+  const v = val.toUpperCase();
+  return /^[AM]/.test(v) || /[AM]$/.test(v);
+}
+
 function afficherResultat(profil) {
   const el = document.getElementById('result');
   el.innerHTML = '';
@@ -143,11 +149,16 @@ function afficherResultat(profil) {
       return;
     }
     const val = profil[entry.key];
+    const isNull = val == null;
+    const isWarn = !isNull
+      && (entry.key === 'nom' || entry.key === 'prenom')
+      && artefactAM(val);
+    const rvClass = 'rv' + (isNull ? ' null' : isWarn ? ' warn' : '');
     const row = document.createElement('div');
     row.className = 'result-row';
     row.innerHTML = `
       <span class="rk">${entry.label}</span>
-      <span class="rv${val == null ? ' null' : ''}">${val != null ? val : '—'}</span>
+      <span class="${rvClass}">${isNull ? '—' : val}</span>
     `;
     el.appendChild(row);
   });
