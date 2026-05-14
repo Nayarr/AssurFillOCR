@@ -63,7 +63,7 @@ dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-ove
 dropZone.addEventListener('drop', e => {
   e.preventDefault();
   dropZone.classList.remove('drag-over');
-  const imgs = [...e.dataTransfer.files].filter(f => f.type.startsWith('image/'));
+  const imgs = [...e.dataTransfer.files].filter(f => f.type.startsWith('image/') || f.type === 'application/pdf');
   addFiles(imgs);
 });
 
@@ -84,8 +84,18 @@ function renderThumbs() {
     const wrap = document.createElement('div');
     wrap.className = 'thumb';
     const img = document.createElement('img');
-    img.src = URL.createObjectURL(f);
-    img.alt = f.name;
+    if (f.type === 'application/pdf') {
+      img.src = '';
+      img.alt = f.name;
+      img.style.display = 'none';
+      const label = document.createElement('span');
+      label.className = 'thumb-pdf-label';
+      label.textContent = '📄 ' + f.name;
+      wrap.appendChild(label);
+    } else {
+      img.src = URL.createObjectURL(f);
+      img.alt = f.name;
+    }
     const btn = document.createElement('button');
     btn.className = 'thumb-remove';
     btn.textContent = '×';
@@ -200,12 +210,26 @@ document.getElementById('btn-injecter').addEventListener('click', async () => {
 
     const tempEmail = genTempEmail();
 
+    const tabId = tab.id;
     await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
+      target: { tabId },
       func: injecterProfil,
       args: [parsedProfil, userPhone, tempEmail, cityPostalCode, durationDays],
       world: 'MAIN',
     });
+
+    const onUpdated = (updatedTabId, changeInfo) => {
+      if (updatedTabId !== tabId || changeInfo.status !== 'complete') return;
+      chrome.tabs.onUpdated.removeListener(onUpdated);
+      chrome.scripting.executeScript({
+        target: { tabId },
+        func: clickEligibilityRadios,
+        args: [cityPostalCode],
+        world: 'MAIN',
+      }).catch(e => console.error('[AssurFill] radios post-reload:', e));
+    };
+    chrome.tabs.onUpdated.addListener(onUpdated);
+
     const s = document.getElementById('status');
     s.textContent = `✓ Données injectées — mail : ${tempEmail}`;
     s.style.display = 'block';
@@ -213,6 +237,40 @@ document.getElementById('btn-injecter').addEventListener('click', async () => {
     showError(`Injection impossible : ${err.message}`);
   }
 });
+
+// ── Radios d'éligibilité injectés après le reload ─────────────────────────
+function clickEligibilityRadios() {
+  function clickRadio(questionText, answerText) {
+    const t = questionText.toLowerCase();
+    for (const lbl of document.querySelectorAll('.pcv-input-wrapper--label')) {
+      if (lbl.textContent.toLowerCase().includes(t)) {
+        const wrapper = lbl.closest('.pcv-input-wrapper');
+        if (!wrapper) continue;
+        for (const radioLbl of wrapper.querySelectorAll('.pcv-label')) {
+          if (radioLbl.textContent.trim().toLowerCase() === answerText.toLowerCase()) {
+            const radio = document.getElementById(radioLbl.getAttribute('for'));
+            if (radio) {
+              radio.checked = true;
+              radio.dispatchEvent(new Event('change', { bubbles: true }));
+              return true;
+            }
+          }
+        }
+      }
+    }
+    return false;
+  }
+
+  let attempts = 0;
+  const poll = setInterval(() => {
+    attempts++;
+    const r1 = clickRadio('délit de fuite',     'Non');
+    const r2 = clickRadio('résiliation',         'Non');
+    const r3 = clickRadio('location',            'Non');
+    const r4 = clickRadio('déplacements privés', 'Oui');
+    if ((r1 && r2 && r3 && r4) || attempts >= 25) clearInterval(poll);
+  }, 600);
+}
 
 // ── Fonction exécutée dans la page (world: MAIN) ───────────────────────────
 function injecterProfil(profil, userPhone, tempEmail, cityPostalCode, durationDays) {
@@ -420,17 +478,9 @@ function injecterProfil(profil, userPhone, tempEmail, cityPostalCode, durationDa
   }, fillDelay + 2000);
 
 
-  // ── Éligibilité (apparaît dynamiquement après remplissage) ────────────────
-  setTimeout(() => {
-    clickRadio('délit de fuite', 'Non');
-    clickRadio('résiliation',    'Non');
-    clickRadio('location',       'Non');
-    clickRadio('usage privé',    'Oui');
-  }, fillDelay + 3800);
-
   // ── Date d'effet (aujourd'hui + 30 min) ───────────────────────────────────
   const effet = new Date(Date.now() + 30 * 60 * 1000);
-  effet.setMinutes(Math.ceil(effet.getMinutes() / 5) * 5, 0, 0);
+  effet.setMinutes(Math.ceil(effet.getMinutes() / 15) * 15, 0, 0);
   const effDate = [
     String(effet.getDate()).padStart(2, '0'),
     String(effet.getMonth() + 1).padStart(2, '0'),
@@ -469,8 +519,9 @@ function injecterProfil(profil, userPhone, tempEmail, cityPostalCode, durationDa
     }, 300);
   }, fillDelay + 5000);
 
-  // ── Prospect : nom, prénom, téléphone ─────────────────────────────────────
+  // ── Prospect : civilité, nom, prénom, téléphone ──────────────────────────
   setTimeout(() => {
+    clickRadio('civilité', 'M.');
     setText(findByLabel('prénom'),                          profil.prenom ?? profil.proprietaire_prenom);
     // match exact pour "Nom" — includes('nom') matcherait aussi "Prénom"
     const nomEl = [...document.querySelectorAll('.pcv-input-wrapper--label')]
@@ -482,6 +533,14 @@ function injecterProfil(profil, userPhone, tempEmail, cityPostalCode, durationDa
 
   // ── Immat + permis : après durée, Vue ne re-rend plus à ce stade ─────────
   setTimeout(() => {
+    // Forcer le blur sur la date de naissance pour que le backend valide l'âge au permis
+    const dobEl = byPh('jj/mm/aaaa', 0);
+    if (dobEl) {
+      dobEl.focus();
+      dobEl.click();
+      document.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+      dobEl.blur();
+    }
     setText(findByLabel('numéro du permis de conduire'), profil.numero_permis);
     setText(byPh('AA-123-AA'),                          profil.numero_immatriculation);
   }, fillDelay + 5500);
@@ -489,7 +548,7 @@ function injecterProfil(profil, userPhone, tempEmail, cityPostalCode, durationDa
   // ── Sauvegarde API directe ────────────────────────────────────────────────
   // Après que Vue a posé marque/modèle/puissance via ses propres PUT, on GET
   // les critères courants, on merge nos valeurs texte, puis on PUT.
-  setTimeout(() => {
+  setTimeout(async () => {
     window.fetch = _origFetch;
     console.log('[AssurFill] sauvegarde API: démarrage', { token: !!_apiToken, id: _prospectId });
     if (!_apiToken || !_prospectId) {
@@ -519,7 +578,13 @@ function injecterProfil(profil, userPhone, tempEmail, cityPostalCode, durationDa
 
     // Valeurs à pousser — uniquement les champs non-null du profil
     // shortterm_vehicle_fiscal_power exclus : liste valide dépend du modèle → 422 si mauvaise valeur
-    const updates = { 'shortterm_vehicle_national_genre': 'VP' };
+    const updates = {
+      'shortterm_vehicle_national_genre': 'VP',
+      'plussimple-car-shorttermcontainer_killing_not_convicted_24months': false,
+      'plussimple-car-shorttermcontainer_killing_no_problem_36months':    false,
+      'plussimple-car-shorttermcontainer_killing_vehicle_owner':          false,
+      'plussimple-car-shorttermcontainer_killing_vehicle_usage':          true,
+    };
 
     if (durationDays) updates['shortterm_duration'] = parseInt(durationDays, 10);
 
@@ -557,10 +622,13 @@ function injecterProfil(profil, userPhone, tempEmail, cityPostalCode, durationDa
 
     // Helper : POST sur les endpoints resources du prospect
     const resBase = `https://api.plussimple.fr/v2/prospects/${_prospectId}/resources/plussimple-car-shorttermcontainer`;
-    const postRes = (ep, filters) => fetch(`${resBase}/${ep}`, {
-      method: 'POST', headers, credentials: 'include', mode: 'cors',
-      body: JSON.stringify({ data: { filters } }),
-    }).then(r => r.json());
+    const postRes = async (ep, filters) => {
+      const r = await fetch(`${resBase}/${ep}`, {
+        method: 'POST', headers, credentials: 'include', mode: 'cors',
+        body: JSON.stringify({ data: { filters } }),
+      });
+      return r.json();
+    };
 
     // Helper : upsert une entrée dans le tableau criterias
     const upsert = (criterias, key, value) => {
@@ -576,115 +644,128 @@ function injecterProfil(profil, userPhone, tempEmail, cityPostalCode, durationDa
       }
     };
 
-    fetch(apiUrl, { method: 'GET', headers, credentials: 'include', mode: 'cors' })
-      .then(r => r.json())
-      .then(async data => {
-        const criterias = data?.data?.['plussimple-car-shorttermcontainer']?.criterias;
-        console.log('[AssurFill] GET criterias:', criterias ? criterias.length + ' entrées' : 'INTROUVABLE');
-        if (!criterias) throw new Error('[AssurFill] structure criterias introuvable');
+    try {
+      const getResp = await fetch(apiUrl, { method: 'GET', headers, credentials: 'include', mode: 'cors' });
+      const data = await getResp.json();
+      const criterias = data?.data?.['plussimple-car-shorttermcontainer']?.criterias;
+      console.log('[AssurFill] GET criterias:', criterias ? criterias.length + ' entrées' : 'INTROUVABLE');
+      if (!criterias) throw new Error('[AssurFill] structure criterias introuvable');
 
-        // Merger les updates de base (permis, car, drivingprofile, subscription_date…)
-        for (const [key, value] of Object.entries(updates)) upsert(criterias, key, value);
+      // Merger les updates de base (permis, car, drivingprofile, subscription_date…)
+      for (const [key, value] of Object.entries(updates)) upsert(criterias, key, value);
 
-        // ── Résolution brand → model → puissance fiscale ─────────────────────
-        // Priorité : valeur capturée par intercepteur > valeur déjà dans criterias
-        let brandId = _brandId || criterias.find(c => c.key === 'shortterm_vehicle_brand_id')?.value;
-        let modelId = _modelId || criterias.find(c => c.key === 'shortterm_vehicle_model_id')?.value;
+      // ── Résolution brand → model → puissance fiscale ─────────────────────
+      // Priorité : valeur capturée par intercepteur > valeur déjà dans criterias
+      let brandId = _brandId || criterias.find(c => c.key === 'shortterm_vehicle_brand_id')?.value;
+      let modelId = _modelId || criterias.find(c => c.key === 'shortterm_vehicle_model_id')?.value;
 
-        // Si brand_id inconnu mais nom de marque disponible → chercher via API
-        if (!brandId && profil.marque) {
+      // Si brand_id inconnu mais nom de marque disponible → chercher via API
+      if (!brandId && profil.marque) {
+        try {
+          const bd = await postRes('vehicle-brand-references', {});
+          const brands = bd?.data?.resources;
+          if (brands) {
+            const mq = profil.marque.toUpperCase();
+            const found = brands.find(b => (b.brand || b.name || '').toUpperCase() === mq);
+            if (found) { brandId = found.id; console.log('[AssurFill] brand résolu:', profil.marque, '→', brandId); }
+          }
+        } catch (e) { console.warn('[AssurFill] brand lookup ignoré:', e.message); }
+      }
+
+      if (brandId) {
+        upsert(criterias, 'shortterm_vehicle_brand_id', brandId);
+
+        // Résoudre model_id depuis le nom de modèle
+        if (profil.modele) {
           try {
-            const bd = await postRes('vehicle-brand-references', {});
-            const brands = bd?.data?.resources;
-            if (brands) {
-              const mq = profil.marque.toUpperCase();
-              const found = brands.find(b => (b.brand || b.name || '').toUpperCase() === mq);
-              if (found) { brandId = found.id; console.log('[AssurFill] brand résolu:', profil.marque, '→', brandId); }
-            }
-          } catch (e) { console.warn('[AssurFill] brand lookup ignoré:', e.message); }
-        }
-
-        if (brandId) {
-          upsert(criterias, 'shortterm_vehicle_brand_id', brandId);
-
-          // Résoudre model_id depuis le nom de modèle
-          if (profil.modele) {
-            try {
-              const md = await postRes('vehicle-model-references', { brand: brandId });
-              const models = md?.data?.resources;
-              if (models) {
-                const mq = profil.modele.toUpperCase();
-                const found = models.find(m => m.model === mq)
-                           || models.find(m => m.model.startsWith(mq) || mq.startsWith(m.model));
-                if (found) {
-                  modelId = found.id;
-                  console.log('[AssurFill] modèle résolu:', profil.modele, '→', modelId);
-                } else {
-                  console.warn('[AssurFill] modèle non trouvé:', profil.modele, 'parmi', models.map(m => m.model).join(', ').slice(0, 100));
-                }
+            const md = await postRes('vehicle-model-references', { brand: brandId });
+            const models = md?.data?.resources;
+            if (models) {
+              const mq = profil.modele.toUpperCase();
+              const found = models.find(m => m.model === mq)
+                         || models.find(m => m.model.startsWith(mq) || mq.startsWith(m.model));
+              if (found) {
+                modelId = found.id;
+                console.log('[AssurFill] modèle résolu:', profil.modele, '→', modelId);
+              } else {
+                console.warn('[AssurFill] modèle non trouvé:', profil.modele, 'parmi', models.map(m => m.model).join(', ').slice(0, 100));
               }
-            } catch (e) { console.warn('[AssurFill] model lookup ignoré:', e.message); }
-          }
-
-          if (modelId) {
-            upsert(criterias, 'shortterm_vehicle_model_id', modelId);
-
-            // Résoudre puissance fiscale : trouver la valeur valide la plus proche
-            if (profil.puissance_fiscale != null) {
-              try {
-                const pfd = await postRes('vehicle-fiscal-power-references', { brand: brandId, model: modelId });
-                const powers = pfd?.data?.resources;
-                if (powers?.length > 0) {
-                  const pf = parseInt(profil.puissance_fiscale, 10);
-                  const closest = powers.reduce((a, b) => Math.abs(b - pf) < Math.abs(a - pf) ? b : a);
-                  upsert(criterias, 'shortterm_vehicle_fiscal_power', closest);
-                  console.log('[AssurFill] PF résolu:', pf, '→', closest, '| valides:', powers.join(', '));
-                }
-              } catch (e) { console.warn('[AssurFill] PF lookup ignoré:', e.message); }
             }
+          } catch (e) { console.warn('[AssurFill] model lookup ignoré:', e.message); }
+        }
+
+        if (modelId) {
+          upsert(criterias, 'shortterm_vehicle_model_id', modelId);
+
+          // Résoudre puissance fiscale : trouver la valeur valide la plus proche
+          if (profil.puissance_fiscale != null) {
+            try {
+              const pfd = await postRes('vehicle-fiscal-power-references', { brand: brandId, model: modelId });
+              const powers = pfd?.data?.resources;
+              if (powers?.length > 0) {
+                const pf = parseInt(profil.puissance_fiscale, 10);
+                const closest = powers.reduce((a, b) => Math.abs(b - pf) < Math.abs(a - pf) ? b : a);
+                upsert(criterias, 'shortterm_vehicle_fiscal_power', closest);
+                console.log('[AssurFill] PF résolu:', pf, '→', closest, '| valides:', powers.join(', '));
+              }
+            } catch (e) { console.warn('[AssurFill] PF lookup ignoré:', e.message); }
           }
         }
+      }
 
-        // ── Ville (critère "city") ────────────────────────────────────────
-        if (cityPostalCode && CITIES[cityPostalCode]) {
-          upsert(criterias, 'city', CITIES[cityPostalCode]);
-          console.log('[AssurFill] ville injectée:', CITIES[cityPostalCode].name);
-        }
+      // ── Ville (critère "city") ────────────────────────────────────────
+      if (cityPostalCode && CITIES[cityPostalCode]) {
+        upsert(criterias, 'city', CITIES[cityPostalCode]);
+        console.log('[AssurFill] ville injectée:', CITIES[cityPostalCode].name);
+      }
 
-        const putBody = { 'plussimple-car-shorttermcontainer': { criterias } };
-        console.log('[AssurFill] PUT body (extrait):', JSON.stringify(putBody).slice(0, 400));
-        return fetch(apiUrl, {
-          method: 'PUT', headers, credentials: 'include', mode: 'cors',
-          body: JSON.stringify(putBody),
-        });
-      })
-      .then(r => {
-        console.log('[AssurFill] PUT criterias HTTP', r.status);
-        return r.text().then(t => console.log('[AssurFill] PUT réponse:', t.slice(0, 200)));
-      })
-      .catch(e => console.error('[AssurFill] sauvegarde API:', e));
+      const putBody = { 'plussimple-car-shorttermcontainer': { criterias } };
+      console.log('[AssurFill] PUT body (extrait):', JSON.stringify(putBody).slice(0, 400));
+      const putResp = await fetch(apiUrl, {
+        method: 'PUT', headers, credentials: 'include', mode: 'cors',
+        body: JSON.stringify(putBody),
+      });
+      console.log('[AssurFill] PUT criterias HTTP', putResp.status);
+      const putText = await putResp.text();
+      console.log('[AssurFill] PUT réponse:', putText.slice(0, 200));
+    } catch (e) {
+      console.error('[AssurFill] sauvegarde API:', e);
+    }
 
-    // ── Nom / prénom via PUT /v2/prospects/{id} ────────────────────────────
+    // ── Nom / prénom / adresse / genre via PUT /v2/prospects/{id} ────────────
     const prospectUrl = `https://api.plussimple.fr/v2/prospects/${_prospectId}`;
-    const prospectBody = {};
+    const prospectBody = { owner_status: 'M' };
     const prenom = profil.prenom ?? profil.proprietaire_prenom;
     const nom    = profil.nom   ?? profil.proprietaire_nom;
     if (prenom) prospectBody.owner_firstname = prenom;
     if (nom)  { prospectBody.owner_lastname = nom; prospectBody.name = nom.toUpperCase(); }
     if (userPhone) prospectBody.phone = userPhone;
+    if (tempEmail) prospectBody.email = tempEmail;
+    if (cityPostalCode && CITIES[cityPostalCode]) {
+      const cityObj = CITIES[cityPostalCode];
+      prospectBody.postal_code    = cityObj.postal_code;
+      prospectBody.city           = cityObj.name;
+      prospectBody.address        = `${cityObj.name} (${cityObj.postal_code})`;
+      prospectBody.insee_code_city = cityObj.insee_code;
+    }
     if (Object.keys(prospectBody).length > 0) {
       prospectBody.enrich  = true;
       prospectBody.include = 'best_product_sheet,step,form_subscription,main_contract';
-      fetch(prospectUrl, {
-        method: 'PUT', headers, credentials: 'include', mode: 'cors',
-        body: JSON.stringify(prospectBody),
-      })
-        .then(r => {
-          console.log('[AssurFill] PUT prospect HTTP', r.status);
-          return r.text().then(t => console.log('[AssurFill] PUT prospect réponse:', t.slice(0, 200)));
-        })
-        .catch(e => console.error('[AssurFill] PUT prospect:', e));
+      try {
+        const r = await fetch(prospectUrl, {
+          method: 'PUT', headers, credentials: 'include', mode: 'cors',
+          body: JSON.stringify(prospectBody),
+        });
+        console.log('[AssurFill] PUT prospect HTTP', r.status);
+        const t = await r.text();
+        console.log('[AssurFill] PUT prospect réponse:', t.slice(0, 200));
+      } catch (e) {
+        console.error('[AssurFill] PUT prospect:', e);
+      }
     }
+
+    console.log('[AssurFill] sauvegarde terminée — rechargement de la page');
+    location.reload();
   }, fillDelay + 6000);
 }
 
