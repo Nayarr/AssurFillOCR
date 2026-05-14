@@ -53,6 +53,10 @@ def _ocr_instance():
 
 def _agrandir(chemin: str) -> np.ndarray:
     img = cv2.imread(chemin)
+    if img is None:
+        from PIL import Image
+        pil = Image.open(chemin).convert("RGB")
+        img = cv2.cvtColor(np.array(pil), cv2.COLOR_RGB2BGR)
     h, w = img.shape[:2]
     echelle = min(_FACTEUR_AGRAND, _COTE_MAX / max(h, w))
     if echelle > 1.0:
@@ -106,7 +110,7 @@ def _pdf_en_images(chemin: str, tmp: str, base: str) -> list[str]:
     doc = fitz.open(chemin)
     paths = []
     for i, page in enumerate(doc):
-        pix = page.get_pixmap(matrix=fitz.Matrix(2.0, 2.0))
+        pix = page.get_pixmap(matrix=fitz.Matrix(2.0, 2.0), colorspace=fitz.csRGB)
         path = os.path.join(tmp, f"{base}_p{i}.png")
         pix.save(path)
         paths.append(path)
