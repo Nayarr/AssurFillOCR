@@ -26,6 +26,7 @@ def parse(texts: list[str], scores: list[float]) -> dict:
     past_header = False  # True une fois qu'on a vu les tokens d'en-tête
     mrz_nom = None     # Nom complet extrait du MRZ (quand '<' présent)
     mrz_prefix = None  # Préfixe du nom MRZ (pour correction artefact en début)
+    all_dates: list[str] = []
 
     for i, (text, score) in enumerate(zip(texts, scores)):
         if score < 0.5:
@@ -132,11 +133,15 @@ def parse(texts: list[str], scores: list[float]) -> dict:
                         data["date_expiration"] = d
                         break
 
-        # ── Date naissance — champ 3. (toute date antérieure à la date d'obtention)
-        elif data["date_naissance"] is None:
-            date = _parse_date(t)
-            if date is not None and (date_delivre_permis is None or date < date_delivre_permis):
-                data["date_naissance"] = date
+        # ── Collecte toutes les dates restantes
+        else:
+            d = _parse_date(t)
+            if d is not None:
+                all_dates.append(d)
+
+    # ── Date naissance = date la plus ancienne parsée dans le recto
+    if data["date_naissance"] is None and all_dates:
+        data["date_naissance"] = min(all_dates)
 
     # ── Récupération date expiration si absente (date > date_obtention dans les textes restants)
     if data["date_expiration"] is None and date_delivre_permis is not None:

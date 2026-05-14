@@ -96,10 +96,8 @@ def parse(texts: list[str], scores: list[float]) -> dict:
         or dates_categories.get("AM")
     )
 
-    if candidate is None:
-        valid_dates = [d for d in all_dates if date_valide_obtention(d)]
-        if valid_dates:
-            candidate = min(valid_dates)
+    if candidate is None and all_dates:
+        candidate = min(all_dates)
 
     if candidate and date_valide_obtention(candidate):
         data["obtention_B"] = candidate
