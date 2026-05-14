@@ -60,7 +60,7 @@ def parse(texts: list[str], scores: list[float]) -> dict:
     ):
         data["obtention_B"] = None
 
-    # Fallback : date visuelle la plus ancienne parmi les dates valides
+    # Fallback : date visuelle la plus ancienne parsée dans le verso
     if data["obtention_B"] is None:
         all_visual = [
             d
@@ -69,9 +69,8 @@ def parse(texts: list[str], scores: list[float]) -> dict:
             for d in [_parse_date_visual(text)]
             if d
         ]
-        valid = [d for d in all_visual if _date_valide_obtention(d, data["date_naissance"])]
-        if valid:
-            data["obtention_B"] = min(valid)
+        if all_visual:
+            data["obtention_B"] = min(all_visual)
 
     return data
 

@@ -53,6 +53,10 @@ def _ocr_instance():
 
 def _agrandir(chemin: str) -> np.ndarray:
     img = cv2.imread(chemin)
+    if img is None:
+        from PIL import Image
+        pil = Image.open(chemin).convert("RGB")
+        img = cv2.cvtColor(np.array(pil), cv2.COLOR_RGB2BGR)
     h, w = img.shape[:2]
     echelle = min(_FACTEUR_AGRAND, _COTE_MAX / max(h, w))
     if echelle > 1.0:
@@ -101,6 +105,19 @@ def _sauver(tmp: str, nom: str, upload) -> str:
     return chemin
 
 
+def _pdf_en_images(chemin: str, tmp: str, base: str) -> list[str]:
+    import fitz
+    doc = fitz.open(chemin)
+    paths = []
+    for i, page in enumerate(doc):
+        pix = page.get_pixmap(matrix=fitz.Matrix(2.0, 2.0), colorspace=fitz.csRGB)
+        path = os.path.join(tmp, f"{base}_p{i}.png")
+        pix.save(path)
+        paths.append(path)
+    doc.close()
+    return paths
+
+
 _ROLES = {
     "permis_fr_nouveau_recto": "recto",
     "permis_dz_nouveau_recto": "recto",
@@ -122,19 +139,24 @@ def parse():
     with tempfile.TemporaryDirectory() as tmp:
         for i, upload in enumerate(uploads):
             chemin = _sauver(tmp, f"doc_{i}", upload)
-            result = _analyser(chemin)
-            role = _ROLES.get(result.get("type", ""), None)
+            fname  = upload.filename or ""
+            is_pdf = fname.lower().endswith(".pdf") or (upload.content_type or "").startswith("application/pdf")
 
-            if role is None:
-                # Type non reconnu : on ignore
-                print(f"  [{upload.filename}] type inconnu, ignoré")
-                continue
+            image_paths = _pdf_en_images(chemin, tmp, f"doc_{i}") if is_pdf else [chemin]
 
-            # Si on a déjà ce rôle, on garde celui avec le moins de nulls
-            if role not in parsed_docs or _nb_nulls(result) < _nb_nulls(parsed_docs[role]):
-                parsed_docs[role] = result
+            for j, img_path in enumerate(image_paths):
+                label = f"{fname}[p{j}]" if is_pdf else fname
+                result = _analyser(img_path)
+                role = _ROLES.get(result.get("type", ""), None)
 
-            print(f"  [{upload.filename}] → {result.get('type')} (rôle: {role})")
+                if role is None:
+                    print(f"  [{label}] type inconnu, ignoré")
+                    continue
+
+                if role not in parsed_docs or _nb_nulls(result) < _nb_nulls(parsed_docs[role]):
+                    parsed_docs[role] = result
+
+                print(f"  [{label}] → {result.get('type')} (rôle: {role})")
 
     recto = parsed_docs.get("recto", {"type": "inconnu"})
     verso = parsed_docs.get("verso", {"type": "inconnu"})
