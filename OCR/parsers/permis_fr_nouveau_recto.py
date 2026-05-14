@@ -146,14 +146,20 @@ def parse(texts: list[str], scores: list[float]) -> dict:
                 data["date_expiration"] = d
                 break
 
-    # ── Correction artefacts A/M via MRZ
-    if data["nom"] is not None and mrz_nom is not None and data["nom"].upper() != mrz_nom.upper():
-        # Nom MRZ complet disponible : vérification début et/ou fin
-        correction = _artefact_am(data["nom"], mrz_nom)
-        if correction is not None:
-            data["nom"] = correction
-    elif data["nom"] is not None and mrz_nom is None and mrz_prefix is not None:
-        # Pas de '<' dans le MRZ : vérification du début seulement via le préfixe
+    # ── Le nom MRZ complet est autoritaire
+    if mrz_nom is not None:
+        if data["nom"] is None:
+            data["nom"] = mrz_nom
+        elif _similar_to_mrz(data["nom"], mrz_nom):
+            # Même nom avec artefacts OCR → MRZ fait foi
+            data["nom"] = mrz_nom
+        else:
+            # Aucune similitude : le prénom s'est retrouvé dans le champ nom → on permute
+            data["prenom"] = _clean_prenom_from_swap(data["nom"])
+            data["nom"] = mrz_nom
+    # Nettoyage artefacts A/M via préfixe MRZ (appliqué même après correction MRZ complète,
+    # car le MRZ peut lui-même contenir les mêmes artefacts que le champ nom)
+    if data["nom"] is not None and mrz_prefix is not None:
         correction = _artefact_am_debut(data["nom"], mrz_prefix)
         if correction is not None:
             data["nom"] = correction
@@ -193,34 +199,56 @@ def _extract_mrz_name_prefix(mrz: str, min_len: int = 4) -> str | None:
 
 def _artefact_am_debut(nom_recto: str, mrz_prefix: str) -> str | None:
     """
-    Supprime un 'A' ou 'M' artéfact en début de nom_recto si recto[1:]
-    commence par le préfixe MRZ (MRZ sans '<', vérification début uniquement).
+    Supprime les artefacts A/M en début (et optionnellement fin) de nom_recto.
+    Le préfixe MRZ est lui-même nettoyé de ses artefacts A/M avant comparaison,
+    car le MRZ peut porter les mêmes artefacts que le champ nom.
     """
     r = nom_recto.upper().strip()
     p = mrz_prefix.upper().strip()
-    if r and r[0] in "AM" and r[1:].startswith(p):
-        return nom_recto[1:]
+    if not r or not p:
+        return None
+    # Nettoyer le préfixe MRZ de ses propres artefacts A/M début et fin
+    p_core = p
+    if len(p_core) > 1 and p_core[0] in "AM":
+        p_core = p_core[1:]
+    if len(p_core) > 1 and p_core[-1] in "AM":
+        p_core = p_core[:-1]
+    if not p_core:
+        return None
+    # Artefact de début : r[1:] doit commencer par p ou p_core
+    stripped_start = r[0] in "AM" and (r[1:].startswith(p) or r[1:].startswith(p_core))
+    candidate = r[1:] if stripped_start else r
+    # Artefact de fin : même char A/M que le début, et l'inner correspond au core
+    if stripped_start and len(candidate) > 1 and candidate[-1] == r[0]:
+        inner = candidate[:-1]
+        if inner.startswith(p_core) or inner == p_core:
+            candidate = inner
+    if candidate != r:
+        return candidate or None
     return None
 
 
-def _artefact_am(nom_recto: str, nom_mrz: str) -> str | None:
-    """
-    Retourne nom_mrz si nom_recto == nom_mrz après suppression d'un 'A' ou 'M'
-    artéfact au début et/ou en fin (une seule lettre par côté au maximum).
-    """
-    r, m = nom_recto.upper().strip(), nom_mrz.upper().strip()
-    for strip_start in (0, 1):
-        for strip_end in (0, 1):
-            if strip_start == 0 and strip_end == 0:
-                continue
-            if strip_start and (not r or r[0] not in "AM"):
-                continue
-            if strip_end and (not r or r[-1] not in "AM"):
-                continue
-            candidate = r[strip_start: len(r) - strip_end if strip_end else len(r)]
-            if candidate == m:
-                return nom_mrz
-    return None
+def _similar_to_mrz(nom_recto: str, mrz_nom: str) -> bool:
+    """Retourne True si nom_recto et mrz_nom désignent vraisemblablement le même nom."""
+    r, m = nom_recto.upper().strip(), mrz_nom.upper().strip()
+    if r == m:
+        return True
+    # MRZ contenu dans le recto (artefacts autour)
+    if m in r:
+        return True
+    # Préfixe commun ≥ 4 chars (ou toute la longueur du nom MRZ si plus court)
+    min_pref = min(4, len(m))
+    return len(r) >= min_pref and r[:min_pref] == m[:min_pref]
+
+
+def _clean_prenom_from_swap(prenom: str) -> str:
+    """Supprime un artefact A/M isolé en début et fin d'un prénom mal classé comme nom."""
+    s = prenom.strip()
+    if len(s) > 2 and s[0] in "AM" and s[1].isupper():
+        s = s[1:]
+    if len(s) > 2 and s[-1] in "AM" and s[-2].isupper():
+        s = s[:-1]
+    return s
 
 
 def _fix_ocr_confusables(s: str | None) -> str | None:

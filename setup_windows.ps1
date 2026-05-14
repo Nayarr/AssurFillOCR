@@ -1,11 +1,11 @@
 # setup_windows.ps1 — AssurFill OCR : installation Windows
 #
 # Usage :
-#   .\setup_windows.ps1                   installe dans ~\AssurFill (défaut)
-#   .\setup_windows.ps1 -InstallDir C:\AssurFill
+#   .\setup_windows.ps1                      installe dans ~\AssurFillOCR (défaut)
+#   .\setup_windows.ps1 -InstallDir C:\AssurFillOCR
 
 param(
-  [string]$InstallDir = "$env:USERPROFILE\AssurFill"
+  [string]$InstallDir = "$env:USERPROFILE\AssurFillOCR"
 )
 
 $ErrorActionPreference = "Stop"
@@ -89,8 +89,11 @@ if (Test-Path $InstallDir) {
   Remove-Item -Recurse -Force $InstallDir
 }
 Log "Clonage dans $InstallDir..."
+$ErrorActionPreference = "Continue"
 git clone $RepoUrl $InstallDir
-if ($LASTEXITCODE -ne 0) { Err "Echec du clonage. Vérifiez votre connexion internet." }
+$cloneExit = $LASTEXITCODE
+$ErrorActionPreference = "Stop"
+if ($cloneExit -ne 0) { Err "Echec du clonage. Vérifiez votre connexion internet." }
 
 # ── 4. Environnement virtuel ──────────────────────────────────────────────────
 if (-not (Test-Path $VenvDir)) {

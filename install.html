@@ -62,11 +62,10 @@
         </tr>
       </tbody>
     </table>
-    <div class="callout warn">
-      <span class="callout-icon">⚠️</span>
+    <div class="callout note">
+      <span class="callout-icon">ℹ️</span>
       <div>
-        <p><strong>Windows :</strong> le script ne tourne pas nativement sur Windows.</p>
-        <p>Installez d'abord <a href="https://git-scm.com/download/win" target="_blank">Git for Windows</a> (cochez <em>Git Bash</em> pendant l'installation), puis lancez le script depuis <strong>Git Bash</strong>. Python et les autres dépendances seront installés automatiquement ensuite.</p>
+        <p><strong>Windows :</strong> utilisez le script PowerShell dédié (voir ci-dessous).</p>
       </div>
     </div>
   </section>
@@ -77,25 +76,32 @@
       <div class="step-badge">1</div>
       <h2>Lancer le script d'installation</h2>
     </div>
-    <p>Télécharger et exécuter <code>setup.sh</code> en une commande :</p>
+    <p><strong>macOS / Linux</strong> — télécharger et exécuter en une commande :</p>
     <div class="code-block">
       <div class="code-block-header">
-        <span>bash</span>
+        <span>macOS</span>
         <button class="copy-btn" onclick="copyCode(this)">Copier</button>
       </div>
-      <pre>curl -fsSL https://raw.githubusercontent.com/Nayarr/AssurFillOCR/main/setup.sh | bash</pre>
+      <pre>curl -fsSL https://raw.githubusercontent.com/Nayarr/AssurFillOCR/main/setup_macos.sh | bash</pre>
     </div>
-    <p>Ou, si vous avez déjà cloné le dépôt :</p>
     <div class="code-block">
       <div class="code-block-header">
-        <span>bash</span>
+        <span>Linux</span>
         <button class="copy-btn" onclick="copyCode(this)">Copier</button>
       </div>
-      <pre>bash setup.sh</pre>
+      <pre>curl -fsSL https://raw.githubusercontent.com/Nayarr/AssurFillOCR/main/setup_linux.sh | bash</pre>
+    </div>
+    <p><strong>Windows</strong> — ouvrir PowerShell en tant qu'administrateur et exécuter :</p>
+    <div class="code-block">
+      <div class="code-block-header">
+        <span>PowerShell</span>
+        <button class="copy-btn" onclick="copyCode(this)">Copier</button>
+      </div>
+      <pre>irm https://raw.githubusercontent.com/Nayarr/AssurFillOCR/main/setup_windows.ps1 | iex</pre>
     </div>
     <p>Le script :</p>
     <ul>
-      <li>clone le dépôt dans <code>~/AssurFill</code></li>
+      <li>clone le dépôt dans <code>~/AssurFillOCR</code></li>
       <li>crée un environnement virtuel Python isolé</li>
       <li>installe <code>flask</code>, <code>opencv-python</code>, <code>numpy</code>, <code>paddlepaddle</code>, <code>paddleocr</code></li>
       <li>enregistre le serveur OCR comme service système (<code>launchd</code> sur macOS, <code>systemd</code> sur Linux) pour qu'il démarre automatiquement à chaque connexion</li>
@@ -119,7 +125,7 @@
       <li>Ouvrir Chrome → <code>chrome://extensions</code></li>
       <li>Activer le <strong>mode développeur</strong> (interrupteur en haut à droite)</li>
       <li>Cliquer <strong>"Charger l'extension non empaquetée"</strong></li>
-      <li>Sélectionner le dossier <code>~/AssurFill/extension</code></li>
+      <li>Sélectionner le dossier <code>~/AssurFillOCR/extension</code></li>
     </ol>
     <p style="margin-top:14px;">L'icône AssurFill apparaît dans la barre d'outils Chrome.</p>
   </section>
@@ -166,7 +172,7 @@ systemctl --user status assurfill-ocr</pre>
           <span>bash</span>
           <button class="copy-btn" onclick="copyCode(this)">Copier</button>
         </div>
-        <pre>~/AssurFill/.venv/bin/python ~/AssurFill/extension/ocr_server.py</pre>
+        <pre>~/AssurFillOCR/.venv/bin/python ~/AssurFillOCR/extension/ocr_server.py</pre>
       </div>
     </div>
 
@@ -183,7 +189,7 @@ systemctl --user status assurfill-ocr</pre>
           <span>bash</span>
           <button class="copy-btn" onclick="copyCode(this)">Copier</button>
         </div>
-        <pre>bash ~/AssurFill/setup.sh</pre>
+        <pre>bash ~/AssurFillOCR/setup.sh</pre>
       </div>
     </div>
   </section>

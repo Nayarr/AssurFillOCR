@@ -1,4 +1,8 @@
 import re
+from datetime import date
+
+
+_AGE_MINIMUM_PERMIS = 17
 
 
 def parse(texts: list[str], scores: list[float]) -> dict:
@@ -50,6 +54,25 @@ def parse(texts: list[str], scores: list[float]) -> dict:
                 data["obtention_B"] = parsed
                 break
 
+    # Validation du candidat principal
+    if data["obtention_B"] and not _date_valide_obtention(
+        data["obtention_B"], data["date_naissance"]
+    ):
+        data["obtention_B"] = None
+
+    # Fallback : date visuelle la plus ancienne parmi les dates valides
+    if data["obtention_B"] is None:
+        all_visual = [
+            d
+            for text, score in zip(texts, scores)
+            if score >= 0.5
+            for d in [_parse_date_visual(text)]
+            if d
+        ]
+        valid = [d for d in all_visual if _date_valide_obtention(d, data["date_naissance"])]
+        if valid:
+            data["obtention_B"] = min(valid)
+
     return data
 
 
@@ -78,3 +101,28 @@ def _parse_date_visual(raw: str) -> str | None:
         year = 1900 + yy if yy >= 50 else 2000 + yy
         return f"{year}-{m.group(2)}-{m.group(1)}"
     return None
+
+
+def _date_valide_obtention(d: str, date_naissance: str | None = None) -> bool:
+    """
+    Retourne True si d est strictement antérieure à aujourd'hui et,
+    si date_naissance est fourni, au moins _AGE_MINIMUM_PERMIS ans après date_naissance.
+    """
+    try:
+        obt = date.fromisoformat(d)
+    except (ValueError, TypeError):
+        return False
+    if obt >= date.today():
+        return False
+    if date_naissance:
+        try:
+            dn = date.fromisoformat(date_naissance)
+            try:
+                age_min = dn.replace(year=dn.year + _AGE_MINIMUM_PERMIS)
+            except ValueError:
+                age_min = date(dn.year + _AGE_MINIMUM_PERMIS, 3, 1)
+            if obt < age_min:
+                return False
+        except (ValueError, TypeError):
+            pass
+    return True
