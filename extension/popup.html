@@ -195,6 +195,60 @@
       color: #1e293b;
     }
     #phone-section input:focus { border-color: #2563eb; }
+
+    #city-section {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      background: #fff;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    #city-section label {
+      font-size: 11px;
+      font-weight: 600;
+      color: #64748b;
+      white-space: nowrap;
+    }
+    #city-section select {
+      flex: 1;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      padding: 5px 8px;
+      font-size: 12px;
+      outline: none;
+      color: #1e293b;
+      background: #fff;
+      cursor: pointer;
+    }
+    #city-section select:focus { border-color: #2563eb; }
+
+    #duration-section {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      background: #fff;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    #duration-section label {
+      font-size: 11px;
+      font-weight: 600;
+      color: #64748b;
+      white-space: nowrap;
+    }
+    #duration-section select {
+      flex: 1;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      padding: 5px 8px;
+      font-size: 12px;
+      outline: none;
+      color: #1e293b;
+      background: #fff;
+      cursor: pointer;
+    }
+    #duration-section select:focus { border-color: #2563eb; }
   </style>
 </head>
 <body>
@@ -203,6 +257,38 @@
   <div id="phone-section">
     <label for="user-phone">&#128222; Téléphone</label>
     <input type="tel" id="user-phone" placeholder="06 00 00 00 00">
+  </div>
+
+  <div id="city-section">
+    <label for="city-select">&#128205; Ville</label>
+    <select id="city-select">
+      <option value="">— Ville —</option>
+      <option value="69780">TOUSSIEU (69780)</option>
+      <option value="34000">MONTPELLIER (34000)</option>
+      <option value="91290">ARPAJON (91290)</option>
+      <option value="27000">ÉVREUX (27000)</option>
+      <option value="93360">NEUILLY-PLAISANCE (93360)</option>
+      <option value="69100">VILLEURBANNE (69100)</option>
+      <option value="93220">GAGNY (93220)</option>
+    </select>
+  </div>
+
+  <div id="duration-section">
+    <label for="duration-select">&#128337; Durée</label>
+    <select id="duration-select">
+      <option value="">— Durée —</option>
+      <option value="1">1 jour</option>
+      <option value="3">3 jours</option>
+      <option value="5">5 jours</option>
+      <option value="8">8 jours</option>
+      <option value="10">10 jours</option>
+      <option value="15">15 jours</option>
+      <option value="21">21 jours</option>
+      <option value="30">30 jours</option>
+      <option value="45">45 jours</option>
+      <option value="60">60 jours</option>
+      <option value="90">90 jours</option>
+    </select>
   </div>
 
   <div id="drop-zone">
