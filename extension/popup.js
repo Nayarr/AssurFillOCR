@@ -500,12 +500,21 @@ function injecterProfil(profil, userPhone, tempEmail, cityPostalCode, durationDa
     const apiUrl = `https://api.plussimple.fr/v2/prospects/${_prospectId}/criterias`;
     const headers = { 'accept': 'application/json', 'authorization': _apiToken, 'content-type': 'application/json' };
 
-    // Convertit DD/MM/YYYY ou DD.MM.YYYY → YYYY-MM-DD (les dates du profil sont déjà ISO)
+    // Convertit DD/MM/YYYY ou DD.MM.YYYY → YYYY-MM-DD, rejette les dates invalides ou futures
+    const _now = new Date();
     const toIso = d => {
       if (!d) return null;
-      if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d;
-      const m = d.match(/^(\d{2})[\/.](\d{2})[\/.](\d{4})$/);
-      return m ? `${m[3]}-${m[2]}-${m[1]}` : null;
+      let iso;
+      if (/^\d{4}-\d{2}-\d{2}$/.test(d)) {
+        iso = d;
+      } else {
+        const m = d.match(/^(\d{2})[\/.](\d{2})[\/.](\d{4})$/);
+        if (!m) return null;
+        iso = `${m[3]}-${m[2]}-${m[1]}`;
+      }
+      const dt = new Date(iso);
+      if (isNaN(dt.getTime()) || dt > _now) return null;
+      return iso;
     };
 
     // Valeurs à pousser — uniquement les champs non-null du profil
