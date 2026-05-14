@@ -19,7 +19,25 @@ Règles de fusion :
   - Croisement permis ↔ CG : si nom du permis ≈ propriétaire CG, préférer le plus long ;
     si trop différents, les deux sont conservés séparément.
 """
+from datetime import date
+
 from .merger import fusionner_texte, fusionner_date
+
+_AGE_MINIMUM_PERMIS = 17
+
+
+def _obtention_conforme_naissance(obtention_b: str, date_naissance: str) -> bool:
+    """Vérifie que obtention_b est au moins _AGE_MINIMUM_PERMIS ans après date_naissance."""
+    try:
+        obt = date.fromisoformat(obtention_b)
+        dn = date.fromisoformat(date_naissance)
+        try:
+            age_min = dn.replace(year=dn.year + _AGE_MINIMUM_PERMIS)
+        except ValueError:
+            age_min = date(dn.year + _AGE_MINIMUM_PERMIS, 3, 1)
+        return obt >= age_min
+    except (ValueError, TypeError):
+        return True
 
 _TYPES_FR_RECTO = {"permis_fr_nouveau_recto"}
 _TYPES_FR_VERSO = {"permis_fr_nouveau_verso"}
@@ -38,15 +56,24 @@ def _profil_permis_fr(recto: dict, verso: dict) -> tuple[dict, list[dict]]:
     Permis FR nouveau : recto porte toute l'identité, verso apporte uniquement obtention_B.
     Aucun champ ne se chevauche → pas de conflit interne.
     """
+    date_naissance = recto.get("date_naissance")
+    obtention_b = verso.get("obtention_B")
+
+    # Le verso parser garantit déjà "avant aujourd'hui" ; on ajoute ici la règle des 17 ans
+    # (date_naissance provient du recto, indisponible lors du parsing du verso).
+    if obtention_b and date_naissance:
+        if not _obtention_conforme_naissance(obtention_b, date_naissance):
+            obtention_b = None
+
     return {
         "nom": recto.get("nom"),
         "prenom": recto.get("prenom"),
-        "date_naissance": recto.get("date_naissance"),
+        "date_naissance": date_naissance,
         "sexe": None,
         "numero_permis": recto.get("numero_permis"),
         "pays_permis": "FR",
         "date_expiration_permis": recto.get("date_expiration"),
-        "obtention_B": verso.get("obtention_B"),
+        "obtention_B": obtention_b,
     }, []
 
 
