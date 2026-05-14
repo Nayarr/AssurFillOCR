@@ -162,8 +162,8 @@ def parse(texts: list[str], scores: list[float]) -> dict:
             # Aucune similitude : le prénom s'est retrouvé dans le champ nom → on permute
             data["prenom"] = _clean_prenom_from_swap(data["nom"])
             data["nom"] = mrz_nom
-    # ── Nettoyage artefacts A/M nom (boucle, guidée par préfixe MRZ)
-    if data["nom"] is not None and mrz_prefix is not None:
+    # ── Nettoyage artefacts A nom uniquement si le MRZ n'a pas fourni le nom directement
+    elif data["nom"] is not None and mrz_prefix is not None:
         data["nom"] = _clean_artefacts_nom(data["nom"], mrz_prefix)
 
     # ── Normalisation OCR : 1→I et 0→O au sein des noms (confusables fréquents)
@@ -204,27 +204,30 @@ def _extract_mrz_name_prefix(mrz: str, min_len: int = 4) -> str | None:
 
 def _clean_artefacts_nom(nom: str, mrz_prefix: str) -> str:
     """
-    Supprime les artefacts A/M en début (boucle : plusieurs A possibles) et en fin de nom,
-    guidé par le cœur du préfixe MRZ (lui-même épuré de ses propres artefacts).
+    Supprime les caractères parasites en début de nom (quelle que soit la lettre),
+    guidé par le cœur du préfixe MRZ. Supprime également un A parasite en fin.
+    Le préfixe lui-même est d'abord épuré de ses propres artefacts A début/fin.
 
     Exemples :
       AAFETTOUCHEA + prefix AFETTOUC → FETTOUCHE
       BOUYAICHEA   + prefix BOUYAICH → BOUYAICHE
+      AMERKAK      + prefix MERKAK   → MERKAK
+      BMERKAK      + prefix MERKAK   → MERKAK
     """
     r = nom.upper().strip()
     p_core = mrz_prefix.upper().strip()
-    # Épurer le préfixe de ses propres artefacts A/M début et fin
-    while len(p_core) > 1 and p_core[0] in "AM":
+    # Épurer le préfixe de ses propres artefacts A début et fin
+    while len(p_core) > 1 and p_core[0] == 'A':
         p_core = p_core[1:]
-    while len(p_core) > 1 and p_core[-1] in "AM":
+    while len(p_core) > 1 and p_core[-1] == 'A':
         p_core = p_core[:-1]
     if not p_core:
         return nom
-    # Supprimer les A/M de début jusqu'à aligner sur le cœur du préfixe
-    while len(r) > len(p_core) and r[0] in "AM" and not r.startswith(p_core):
+    # Supprimer les caractères de début (quelle que soit la lettre) jusqu'à aligner sur le cœur
+    while len(r) > len(p_core) and not r.startswith(p_core):
         r = r[1:]
-    # Supprimer l'artefact de fin si le nom sans ce caractère commence par le cœur
-    if len(r) > 1 and r[-1] in "AM" and r[:-1].startswith(p_core):
+    # Supprimer l'artefact A de fin si le nom sans ce caractère commence par le cœur
+    if len(r) > 1 and r[-1] == 'A' and r[:-1].startswith(p_core):
         r = r[:-1]
     return r
 

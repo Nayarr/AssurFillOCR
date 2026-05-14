@@ -18,8 +18,13 @@ def _match_category(raw: str) -> str | None:
     Retourne la catégorie EU correspondante ou None.
     Nettoie le bruit OCR (caractères non-alphanum) puis tente des préfixes de
     longueur 3 et 2 — pas 1, pour éviter les faux positifs sur A/B/C/D/L/T.
+    Normalise la confusion OCR fréquente 8 → B.
+    Les tokens entre parenthèses (ex : codes de restriction "(B)") sont ignorés.
     """
+    if re.search(r"[()]", raw):
+        return None
     cat = re.sub(r"[^A-Z0-9]", "", raw.strip().upper())
+    cat = cat.replace("8", "B")
     if cat in _CATEGORIES_EU:
         return cat
     for length in [3, 2]:
@@ -29,11 +34,18 @@ def _match_category(raw: str) -> str | None:
 
 
 def _parse_date(raw: str) -> str | None:
-    """Extrait DD.MM.YY et retourne YYYY-MM-DD (YY>=50 → 19xx, sinon 20xx)."""
-    m = re.search(r"(\d{2})[./](\d{2})[./](\d{2})", raw)
+    """Extrait DD.MM.YYYY ou DD.MM.YY et retourne YYYY-MM-DD (YY>=50 → 19xx, sinon 20xx)."""
+    m = re.search(r"(\d{2})[./](\d{2})[./](\d{4})", raw)
+    if m:
+        dd, mm = int(m.group(1)), int(m.group(2))
+        if 1 <= dd <= 31 and 1 <= mm <= 12:
+            return f"{m.group(3)}-{m.group(2)}-{m.group(1)}"
+    m = re.search(r"(\d{2})[./](\d{2})[./](\d{2})(?!\d)", raw)
     if not m:
         return None
-    yy = int(m.group(3))
+    dd, mm, yy = int(m.group(1)), int(m.group(2)), int(m.group(3))
+    if not (1 <= dd <= 31 and 1 <= mm <= 12):
+        return None
     year = 1900 + yy if yy >= 50 else 2000 + yy
     return f"{year}-{m.group(2)}-{m.group(1)}"
 
