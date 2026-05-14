@@ -1,4 +1,5 @@
 import re
+from datetime import date
 
 _CATEGORIES_EU = frozenset({
     "AM", "A1", "A2", "A",
@@ -9,6 +10,7 @@ _CATEGORIES_EU = frozenset({
 })
 
 _DATE_WINDOW = 5
+_AGE_MINIMUM_PERMIS = 17
 
 
 def _match_category(raw: str) -> str | None:
@@ -26,6 +28,41 @@ def _match_category(raw: str) -> str | None:
     return None
 
 
+def _parse_date(raw: str) -> str | None:
+    """Extrait DD.MM.YY et retourne YYYY-MM-DD (YY>=50 → 19xx, sinon 20xx)."""
+    m = re.search(r"(\d{2})[./](\d{2})[./](\d{2})", raw)
+    if not m:
+        return None
+    yy = int(m.group(3))
+    year = 1900 + yy if yy >= 50 else 2000 + yy
+    return f"{year}-{m.group(2)}-{m.group(1)}"
+
+
+def date_valide_obtention(d: str, date_naissance: str | None = None) -> bool:
+    """
+    Retourne True si d est strictement antérieure à aujourd'hui et,
+    si date_naissance est fourni, au moins _AGE_MINIMUM_PERMIS ans après date_naissance.
+    """
+    try:
+        obt = date.fromisoformat(d)
+    except (ValueError, TypeError):
+        return False
+    if obt >= date.today():
+        return False
+    if date_naissance:
+        try:
+            dn = date.fromisoformat(date_naissance)
+            try:
+                age_min = dn.replace(year=dn.year + _AGE_MINIMUM_PERMIS)
+            except ValueError:
+                age_min = date(dn.year + _AGE_MINIMUM_PERMIS, 3, 1)
+            if obt < age_min:
+                return False
+        except (ValueError, TypeError):
+            pass
+    return True
+
+
 def parse(texts: list[str], scores: list[float]) -> dict:
     """
     Parser pour permis de conduire français nouvelle génération verso (post-2013, format EU).
@@ -36,33 +73,35 @@ def parse(texts: list[str], scores: list[float]) -> dict:
         "obtention_B": None,
     }
 
-    dates_categories = {}
+    all_dates: list[str] = []
+    dates_categories: dict[str, str] = {}
 
     for i, text in enumerate(texts):
+        d = _parse_date(text)
+        if d:
+            all_dates.append(d)
+
         cat = _match_category(text)
         if cat is None or cat in dates_categories:
             continue
         for j in range(i + 1, min(i + 1 + _DATE_WINDOW, len(texts))):
-            date = _parse_date(texts[j])
-            if date:
-                dates_categories[cat] = date
+            date_str = _parse_date(texts[j])
+            if date_str:
+                dates_categories[cat] = date_str
                 break
 
-    data["obtention_B"] = (
+    candidate = (
         dates_categories.get("B")
         or dates_categories.get("B1")
         or dates_categories.get("AM")
     )
 
+    if candidate is None:
+        valid_dates = [d for d in all_dates if date_valide_obtention(d)]
+        if valid_dates:
+            candidate = min(valid_dates)
+
+    if candidate and date_valide_obtention(candidate):
+        data["obtention_B"] = candidate
+
     return data
-
-
-def _parse_date(raw: str) -> str | None:
-    """Extrait DD.MM.YY et retourne YYYY-MM-DD (YY>=50 → 19xx, sinon 20xx)."""
-    m = re.search(r"(\d{2})[./](\d{2})[./](\d{2})", raw)
-    if not m:
-        return None
-    yy = int(m.group(3))
-    year = 1900 + yy if yy >= 50 else 2000 + yy
-    return f"{year}-{m.group(2)}-{m.group(1)}"
-
