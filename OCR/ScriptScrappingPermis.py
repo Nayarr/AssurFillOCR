@@ -4,6 +4,7 @@ import numpy as np
 import os
 import json
 import sys
+import tempfile
 
 sys.path.insert(0, os.path.dirname(__file__))
 from detector import detecter_et_parser
@@ -41,7 +42,7 @@ _ROLES = {
     "cg_provisoire":           "cg",
 }
 
-EXTENSIONS_IMAGE = (".jpg", ".jpeg", ".png", ".bmp", ".JPG", ".JPEG", ".PNG", ".BMP")
+EXTENSIONS_IMAGE = (".jpg", ".jpeg", ".png", ".bmp", ".pdf", ".JPG", ".JPEG", ".PNG", ".BMP", ".PDF")
 
 
 # ── OCR ───────────────────────────────────────────────────────────────────────
@@ -63,6 +64,10 @@ os.makedirs(dossier_sortie, exist_ok=True)
 def agrandir_image(chemin_image: str) -> np.ndarray:
     """Agrandit et nettoie une image pour améliorer la qualité OCR."""
     image = cv2.imread(chemin_image)
+    if image is None:
+        from PIL import Image
+        pil = Image.open(chemin_image).convert("RGB")
+        image = cv2.cvtColor(np.array(pil), cv2.COLOR_RGB2BGR)
     hauteur, largeur = image.shape[:2]
     echelle = min(FACTEUR_AGRAND, COTE_MAX / max(hauteur, largeur))
     if echelle > 1.0:
@@ -84,6 +89,29 @@ def _nb_nulls(extrait: dict) -> int:
     return sum(1 for k, v in extrait.items() if k not in ("type", "_conflits") and v is None)
 
 
+def _predict_safe(source) -> tuple:
+    """Wrapper autour de ocr.predict() qui absorbe les bugs internes de PaddleX."""
+    try:
+        for res in ocr.predict(source):
+            return res, res["rec_texts"], res["rec_scores"]
+    except (AssertionError, Exception) as exc:
+        print(f"  [WARN] ocr.predict a échoué ({type(exc).__name__}: {exc}), image ignorée")
+    return None, None, None
+
+
+def _pdf_en_images(chemin: str, tmp: str, base: str) -> list[str]:
+    import fitz
+    doc = fitz.open(chemin)
+    paths = []
+    for i, page in enumerate(doc):
+        pix = page.get_pixmap(matrix=fitz.Matrix(2.0, 2.0), colorspace=fitz.csRGB)
+        path = os.path.join(tmp, f"{base}_p{i}.png")
+        pix.save(path)
+        paths.append(path)
+    doc.close()
+    return paths
+
+
 def analyser_image(chemin_image: str) -> tuple[dict, object]:
     """
     Lance l'OCR sur une image, parse le résultat et retente avec upscale si nécessaire.
@@ -91,28 +119,21 @@ def analyser_image(chemin_image: str) -> tuple[dict, object]:
     Returns:
         (parsed_dict, res_ocr)  — res_ocr permet de sauvegarder les visuels OCR.
     """
-    resultat = ocr.predict(chemin_image)
-    res_ocr = None
-    extrait = {"type": "inconnu"}
-
-    for res in resultat:
-        res_ocr = res
-        extrait = detecter_et_parser(res["rec_texts"], res["rec_scores"])
-        break
+    res_ocr, texts, scores = _predict_safe(chemin_image)
+    extrait = detecter_et_parser(texts, scores) if texts is not None else {"type": "inconnu"}
 
     if a_champs_vides(extrait):
         print(f"  Champs null détectés, retry avec upscale...")
         image_agrandie = agrandir_image(chemin_image)
-        resultat_up = ocr.predict(image_agrandie)
-        for res_up in resultat_up:
-            extrait_up = detecter_et_parser(res_up["rec_texts"], res_up["rec_scores"])
+        res_up, texts_up, scores_up = _predict_safe(image_agrandie)
+        if texts_up is not None:
+            extrait_up = detecter_et_parser(texts_up, scores_up)
             if _nb_nulls(extrait_up) < _nb_nulls(extrait):
                 extrait = extrait_up
                 res_ocr = res_up
                 print(f"  Upscale retenu.")
             else:
                 print(f"  Upscale non retenu (pas d'amélioration).")
-            break
 
     return extrait, res_ocr
 
@@ -124,32 +145,39 @@ for type_doc, dossier in DOSSIERS_DOCUMENTS.items():
         print(f"\n[{type_doc}] Dossier introuvable, ignoré : {dossier}")
         continue
 
-    fichiers_images = [
+    fichiers = [
         f for f in os.listdir(dossier)
-        if f.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp'))
+        if any(f.lower().endswith(ext) for ext in EXTENSIONS_IMAGE)
     ]
-    print(f"\n=== {type_doc} : {len(fichiers_images)} image(s) ===")
+    print(f"\n=== {type_doc} : {len(fichiers)} fichier(s) ===")
 
-    for fichier_image in fichiers_images:
-        chemin_image = os.path.join(dossier, fichier_image)
-        print(f"\nTraitement de : {fichier_image}")
+    with tempfile.TemporaryDirectory() as tmp:
+        for fichier in fichiers:
+            chemin = os.path.join(dossier, fichier)
+            is_pdf = fichier.lower().endswith(".pdf")
+            image_paths = _pdf_en_images(chemin, tmp, os.path.splitext(fichier)[0]) if is_pdf else [chemin]
 
-        extrait, res_ocr = analyser_image(chemin_image)
+            for j, chemin_image in enumerate(image_paths):
+                label = f"{fichier}[p{j}]" if is_pdf else fichier
+                print(f"\nTraitement de : {label}")
 
-        if res_ocr is not None:
-            res_ocr.save_to_img(dossier_sortie)
-            res_ocr.save_to_json(dossier_sortie)
+                extrait, res_ocr = analyser_image(chemin_image)
 
-        print(f"  Type détecté : {extrait.get('type')}")
-        for cle, val in extrait.items():
-            if cle != "type":
-                print(f"  {cle:<28}: {val}")
+                if res_ocr is not None:
+                    res_ocr.save_to_img(dossier_sortie)
+                    res_ocr.save_to_json(dossier_sortie)
 
-        nom_sortie = os.path.splitext(fichier_image)[0] + "_parsed.json"
-        with open(os.path.join(dossier_sortie, nom_sortie), "w", encoding="utf-8") as f:
-            json.dump(extrait, f, ensure_ascii=False, indent=2)
+                print(f"  Type détecté : {extrait.get('type')}")
+                for cle, val in extrait.items():
+                    if cle != "type":
+                        print(f"  {cle:<28}: {val}")
 
-        print(f"✓ {fichier_image} terminé")
+                base = os.path.splitext(fichier)[0] + (f"_p{j}" if is_pdf else "")
+                nom_sortie = base + "_parsed.json"
+                with open(os.path.join(dossier_sortie, nom_sortie), "w", encoding="utf-8") as f:
+                    json.dump(extrait, f, ensure_ascii=False, indent=2)
+
+                print(f"✓ {label} terminé")
 
 
 # ── Mode profil ───────────────────────────────────────────────────────────────
@@ -170,48 +198,52 @@ def traiter_dossier_profil(nom_dossier: str, chemin_dossier: str) -> None:
 
     fichiers = sorted([
         f for f in os.listdir(chemin_dossier)
-        if any(f.endswith(ext) for ext in EXTENSIONS_IMAGE)
+        if any(f.lower().endswith(ext) for ext in EXTENSIONS_IMAGE)
     ])
 
-    if len(fichiers) != 3:
-        print(f"  [IGNORÉ] {len(fichiers)} image(s) trouvée(s), 3 attendues.")
+    if not fichiers:
+        print(f"  [IGNORÉ] Aucun fichier trouvé.")
         return
 
     # OCR + classification par rôle
     roles: dict[str, dict] = {}  # "recto" | "verso" | "cg" → parsed
-    conflits_roles: list[str] = []
 
-    for fichier in fichiers:
-        chemin = os.path.join(chemin_dossier, fichier)
-        print(f"\n  → {fichier}")
-        extrait, res_ocr = analyser_image(chemin)
-        type_doc = extrait.get("type", "inconnu")
-        role = _ROLES.get(type_doc)
+    with tempfile.TemporaryDirectory() as tmp:
+        for fichier in fichiers:
+            chemin = os.path.join(chemin_dossier, fichier)
+            is_pdf = fichier.lower().endswith(".pdf")
+            image_paths = _pdf_en_images(chemin, tmp, os.path.splitext(fichier)[0]) if is_pdf else [chemin]
 
-        print(f"     type : {type_doc}  |  rôle : {role or '?'}")
+            for j, img_path in enumerate(image_paths):
+                label = f"{fichier}[p{j}]" if is_pdf else fichier
+                print(f"\n  → {label}")
+                extrait, res_ocr = analyser_image(img_path)
+                type_doc = extrait.get("type", "inconnu")
+                role = _ROLES.get(type_doc)
 
-        if role is None:
-            print(f"  [AVERT] Type non reconnu '{type_doc}', image ignorée.")
-            continue
+                print(f"     type : {type_doc}  |  rôle : {role or '?'}")
 
-        if role in roles:
-            conflits_roles.append(
-                f"Deux images classées '{role}' : {list(roles.keys())} + {fichier}"
-            )
-        else:
-            roles[role] = extrait
+                if role is None:
+                    print(f"  [AVERT] Type non reconnu '{type_doc}', image ignorée.")
+                    continue
 
-        if res_ocr is not None:
-            res_ocr.save_to_img(dossier_sortie_profil)
-            res_ocr.save_to_json(dossier_sortie_profil)
+                if role in roles:
+                    if _nb_nulls(extrait) < _nb_nulls(roles[role]):
+                        roles[role] = extrait
+                        print(f"  [AVERT] Rôle '{role}' dupliqué, conservé le meilleur : {label}")
+                    else:
+                        print(f"  [AVERT] Rôle '{role}' dupliqué, conservé le précédent.")
+                else:
+                    roles[role] = extrait
+
+                if res_ocr is not None:
+                    res_ocr.save_to_img(dossier_sortie_profil)
+                    res_ocr.save_to_json(dossier_sortie_profil)
 
     # Validation des rôles
     manquants = [r for r in ("recto", "verso", "cg") if r not in roles]
-    if manquants or conflits_roles:
-        if manquants:
-            print(f"\n  [ERREUR] Rôles manquants : {manquants}")
-        for msg in conflits_roles:
-            print(f"\n  [ERREUR] Conflit de rôle : {msg}")
+    if manquants:
+        print(f"\n  [ERREUR] Rôles manquants : {manquants}")
         print(f"  Profil {nom_dossier} ignoré.\n")
         return
 
