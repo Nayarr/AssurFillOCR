@@ -157,8 +157,9 @@ def parse(texts: list[str], scores: list[float]) -> dict:
             # Aucune similitude : le prénom s'est retrouvé dans le champ nom → on permute
             data["prenom"] = _clean_prenom_from_swap(data["nom"])
             data["nom"] = mrz_nom
-    elif data["nom"] is not None and mrz_prefix is not None:
-        # Pas de '<' dans le MRZ : vérification du début seulement via le préfixe
+    # Nettoyage artefacts A/M via préfixe MRZ (appliqué même après correction MRZ complète,
+    # car le MRZ peut lui-même contenir les mêmes artefacts que le champ nom)
+    if data["nom"] is not None and mrz_prefix is not None:
         correction = _artefact_am_debut(data["nom"], mrz_prefix)
         if correction is not None:
             data["nom"] = correction
@@ -198,13 +199,32 @@ def _extract_mrz_name_prefix(mrz: str, min_len: int = 4) -> str | None:
 
 def _artefact_am_debut(nom_recto: str, mrz_prefix: str) -> str | None:
     """
-    Supprime un 'A' ou 'M' artéfact en début de nom_recto si recto[1:]
-    commence par le préfixe MRZ (MRZ sans '<', vérification début uniquement).
+    Supprime les artefacts A/M en début (et optionnellement fin) de nom_recto.
+    Le préfixe MRZ est lui-même nettoyé de ses artefacts A/M avant comparaison,
+    car le MRZ peut porter les mêmes artefacts que le champ nom.
     """
     r = nom_recto.upper().strip()
     p = mrz_prefix.upper().strip()
-    if r and r[0] in "AM" and r[1:].startswith(p):
-        return nom_recto[1:]
+    if not r or not p:
+        return None
+    # Nettoyer le préfixe MRZ de ses propres artefacts A/M début et fin
+    p_core = p
+    if len(p_core) > 1 and p_core[0] in "AM":
+        p_core = p_core[1:]
+    if len(p_core) > 1 and p_core[-1] in "AM":
+        p_core = p_core[:-1]
+    if not p_core:
+        return None
+    # Artefact de début : r[1:] doit commencer par p ou p_core
+    stripped_start = r[0] in "AM" and (r[1:].startswith(p) or r[1:].startswith(p_core))
+    candidate = r[1:] if stripped_start else r
+    # Artefact de fin : même char A/M que le début, et l'inner correspond au core
+    if stripped_start and len(candidate) > 1 and candidate[-1] == r[0]:
+        inner = candidate[:-1]
+        if inner.startswith(p_core) or inner == p_core:
+            candidate = inner
+    if candidate != r:
+        return candidate or None
     return None
 
 
