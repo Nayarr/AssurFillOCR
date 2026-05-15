@@ -199,7 +199,7 @@ function genTempEmail() {
 // ── Registre des sites supportés ──────────────────────────────────────────
 const SITES = [
   {
-    match:      h => h.includes('plussimple.fr'),
+    match:      h => h.includes('app.simplifieurs.pro'),
     inject:     injecterProfilPlusSimple,
     postReload: postReloadPlusSimple,
   },
