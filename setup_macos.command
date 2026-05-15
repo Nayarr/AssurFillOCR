@@ -75,8 +75,8 @@ if [ -z "$PYTHON_BIN" ]; then
   _ensure_brew
   brew install python@3.12
   for candidate in \
-      "$(brew --prefix python@3.12)/bin/python3.12" \
-      "$(brew --prefix)/bin/python3.12" \
+      /opt/homebrew/bin/python3.12 \
+      /usr/local/bin/python3.12 \
       python3.12 python3; do
     _python_ok "$candidate" 2>/dev/null && PYTHON_BIN="$candidate" && break
   done
