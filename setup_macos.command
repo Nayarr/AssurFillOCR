@@ -6,6 +6,12 @@
 
 set -euo pipefail
 
+# Finder ouvre les .command sans PATH complet — on le reconstruit
+export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
+
+# Garder Terminal ouvert quoi qu'il arrive
+trap 'echo ""; echo "  ❌  Une erreur est survenue (voir ci-dessus)."; echo "  Appuie sur Entrée pour fermer."; read -r _' ERR
+
 REPO_URL="https://github.com/Nayarr/AssurFillOCR"
 INSTALL_DIR="${1:-$HOME/AssurFillOCR}"
 VENV_DIR="$INSTALL_DIR/.venv"
@@ -147,3 +153,6 @@ echo "    2. 'Charger l'extension non empaquetée' → $INSTALL_DIR/extension"
 echo ""
 
 [ -f "$INSTALL_DIR/install.html" ] && open "$INSTALL_DIR/install.html"
+
+echo "  Appuie sur Entrée pour fermer."
+read -r _
