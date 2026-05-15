@@ -118,7 +118,7 @@ Log "Installation de numpy compatible..."
 & $PythonVenv -m pip install "numpy<2.4" -q
 if ($LASTEXITCODE -ne 0) { Err "Echec de l'installation de numpy." }
 
-$Packages = @("flask", "opencv-python", "paddleocr")
+$Packages = @("flask", "opencv-python", "paddleocr", "Pillow", "PyMuPDF")
 foreach ($pkg in $Packages) {
   Log "Installation de $pkg..."
   & $PythonVenv -m pip install $pkg

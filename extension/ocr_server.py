@@ -108,14 +108,11 @@ def _sauver(tmp: str, nom: str, upload) -> str:
 def _pdf_en_images(chemin: str, tmp: str, base: str) -> list[str]:
     import fitz
     doc = fitz.open(chemin)
-    paths = []
-    for i, page in enumerate(doc):
-        pix = page.get_pixmap(matrix=fitz.Matrix(2.0, 2.0), colorspace=fitz.csRGB)
-        path = os.path.join(tmp, f"{base}_p{i}.png")
-        pix.save(path)
-        paths.append(path)
+    pix = doc[0].get_pixmap(matrix=fitz.Matrix(2.0, 2.0), colorspace=fitz.csRGB)
     doc.close()
-    return paths
+    path = os.path.join(tmp, f"{base}_p0.png")
+    pix.save(path)
+    return [path]
 
 
 _ROLES = {
