@@ -98,7 +98,7 @@ PYTHON_VENV="$VENV_DIR/bin/python"
 log "Mise à jour de pip…"
 "$PIP" install --upgrade pip --quiet
 log "Installation des paquets (peut prendre plusieurs minutes)…"
-"$PIP" install flask opencv-python numpy paddlepaddle paddleocr
+"$PIP" install flask opencv-python numpy paddlepaddle paddleocr Pillow PyMuPDF
 log "Dépendances installées."
 
 # ── 6. Service launchd ────────────────────────────────────────────────────────

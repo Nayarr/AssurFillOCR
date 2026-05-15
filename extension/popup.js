@@ -196,6 +196,20 @@ function genTempEmail() {
   return `${local}@${domains[Math.floor(Math.random() * domains.length)]}`;
 }
 
+// ── Registre des sites supportés ──────────────────────────────────────────
+const SITES = [
+  {
+    match:      h => h.includes('plussimple.fr'),
+    inject:     injecterProfilPlusSimple,
+    postReload: postReloadPlusSimple,
+  },
+  {
+    match:      h => h.includes('jlassure.com'),
+    inject:     injecterProfilJLAssur,
+    postReload: null,
+  },
+];
+
 // ── Injecter ───────────────────────────────────────────────────────────────
 document.getElementById('btn-injecter').addEventListener('click', async () => {
   if (!parsedProfil) return;
@@ -209,26 +223,35 @@ document.getElementById('btn-injecter').addEventListener('click', async () => {
     const durationDays   = document.getElementById('duration-select').value || null;
 
     const tempEmail = genTempEmail();
+    const tabId     = tab.id;
 
-    const tabId = tab.id;
+    const url  = new URL(tab.url);
+    const site = SITES.find(s => s.match(url.hostname));
+    if (!site) {
+      showError(`Site non supporté : ${url.hostname}`);
+      return;
+    }
+
     await chrome.scripting.executeScript({
       target: { tabId },
-      func: injecterProfil,
-      args: [parsedProfil, userPhone, tempEmail, cityPostalCode, durationDays],
-      world: 'MAIN',
+      func:   site.inject,
+      args:   [parsedProfil, userPhone, tempEmail, cityPostalCode, durationDays],
+      world:  'MAIN',
     });
 
-    const onUpdated = (updatedTabId, changeInfo) => {
-      if (updatedTabId !== tabId || changeInfo.status !== 'complete') return;
-      chrome.tabs.onUpdated.removeListener(onUpdated);
-      chrome.scripting.executeScript({
-        target: { tabId },
-        func: clickEligibilityRadios,
-        args: [cityPostalCode],
-        world: 'MAIN',
-      }).catch(e => console.error('[AssurFill] radios post-reload:', e));
-    };
-    chrome.tabs.onUpdated.addListener(onUpdated);
+    if (site.postReload) {
+      const onUpdated = (updatedTabId, changeInfo) => {
+        if (updatedTabId !== tabId || changeInfo.status !== 'complete') return;
+        chrome.tabs.onUpdated.removeListener(onUpdated);
+        chrome.scripting.executeScript({
+          target: { tabId },
+          func:   site.postReload,
+          args:   [cityPostalCode],
+          world:  'MAIN',
+        }).catch(e => console.error('[AssurFill] post-reload:', e));
+      };
+      chrome.tabs.onUpdated.addListener(onUpdated);
+    }
 
     const s = document.getElementById('status');
     s.textContent = `✓ Données injectées — mail : ${tempEmail}`;
@@ -238,8 +261,8 @@ document.getElementById('btn-injecter').addEventListener('click', async () => {
   }
 });
 
-// ── Radios d'éligibilité injectés après le reload ─────────────────────────
-function clickEligibilityRadios() {
+// ── PlusSimple : radios d'éligibilité injectés après le reload ────────────
+function postReloadPlusSimple() {
   function clickRadio(questionText, answerText) {
     const t = questionText.toLowerCase();
     for (const lbl of document.querySelectorAll('.pcv-input-wrapper--label')) {
@@ -272,8 +295,8 @@ function clickEligibilityRadios() {
   }, 600);
 }
 
-// ── Fonction exécutée dans la page (world: MAIN) ───────────────────────────
-function injecterProfil(profil, userPhone, tempEmail, cityPostalCode, durationDays) {
+// ── PlusSimple : injection principale ─────────────────────────────────────
+function injecterProfilPlusSimple(profil, userPhone, tempEmail, cityPostalCode, durationDays) {
   const CITIES = {
     '69780': { insee_code: '69298', postal_code: '69780', name: 'TOUSSIEU' },
     '34000': { insee_code: '34172', postal_code: '34000', name: 'MONTPELLIER' },
@@ -767,6 +790,110 @@ function injecterProfil(profil, userPhone, tempEmail, cityPostalCode, durationDa
     console.log('[AssurFill] sauvegarde terminée — rechargement de la page');
     location.reload();
   }, fillDelay + 6000);
+}
+
+// ── JL Assur : injection (jlassure.com) ───────────────────────────────────
+function injecterProfilJLAssur(profil, userPhone, tempEmail, cityPostalCode, _durationDays) {
+  const CITIES = {
+    '69780': { postal_code: '69780', name: 'TOUSSIEU' },
+    '34000': { postal_code: '34000', name: 'MONTPELLIER' },
+    '91290': { postal_code: '91290', name: 'ARPAJON' },
+    '27000': { postal_code: '27000', name: 'EVREUX' },
+    '93360': { postal_code: '93360', name: 'NEUILLY-PLAISANCE' },
+    '69100': { postal_code: '69100', name: 'VILLEURBANNE' },
+    '93220': { postal_code: '93220', name: 'GAGNY' },
+  };
+
+  // YYYY-MM-DD ou DD/MM/YYYY → DD-MM-YYYY
+  function toJLDate(d) {
+    if (!d) return '';
+    if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return `${d.slice(8,10)}-${d.slice(5,7)}-${d.slice(0,4)}`;
+    return String(d).replace(/\//g, '-');
+  }
+
+  function toCivilite(sexe) {
+    if (!sexe) return 'MR';
+    return /^f/i.test(sexe) ? 'MME' : 'MR';
+  }
+
+  // La page a un bug de récursion infinie entre cascade() et onMotifAssuranceTemporaireChange()
+  // déclenché lors de l'injection — on pose un guard avant toute opération.
+  if (typeof window.onMotifAssuranceTemporaireChange === 'function') {
+    const _orig = window.onMotifAssuranceTemporaireChange;
+    let _running = false;
+    window.onMotifAssuranceTemporaireChange = function(...args) {
+      if (_running) return;
+      _running = true;
+      try { return _orig.apply(this, args); } finally { _running = false; }
+    };
+  }
+
+  const cityObj = cityPostalCode ? CITIES[cityPostalCode] : null;
+  const BASE    = 'https://www.jlassure.com//sousfiche/gestion_app/';
+  const OPTS    = { method: 'GET', credentials: 'include', mode: 'cors' };
+
+  (async () => {
+    try {
+      // ── 1. Véhicule ──────────────────────────────────────────────────────
+      const vehi = new URLSearchParams({
+        immatriculation: profil.numero_immatriculation ?? '',
+        mise_circulation: '',
+        chassis:          profil.vin ?? '',
+        pays_immat:       'FRANCE METROPOLITAINE',
+        marque:           profil.marque ?? '',
+        modele:           profil.modele ?? '',
+        categorie:        'VP',
+        puissance:        profil.puissance_fiscale != null ? String(profil.puissance_fiscale) : '',
+        ptc:              '',
+        place:            '',
+        valeur_argus:     '',
+        vehi_location:    'NON',
+      });
+      const vr = await fetch(`${BASE}recherche_vehicule.php?${vehi}`, OPTS);
+      console.log('[AssurFill/JLAssur] véhicule HTTP', vr.status, await vr.text());
+
+      // ── 2. Client ────────────────────────────────────────────────────────
+      const client = new URLSearchParams({
+        nom:             profil.nom ?? profil.proprietaire_nom ?? '',
+        prenom:          profil.prenom ?? profil.proprietaire_prenom ?? '',
+        naissance:       toJLDate(profil.date_naissance),
+        civilite:        toCivilite(profil.sexe),
+        adresse:         cityObj ? `${cityObj.name} ${cityObj.postal_code}` : '',
+        code_postal:     cityObj?.postal_code ?? '',
+        ville:           cityObj?.name ?? '',
+        pays_residence:  'FRANCE METROPOLITAINE',
+        num_permis:      profil.numero_permis ?? '',
+        date_permis:     toJLDate(profil.obtention_B),
+        pays_permis:     'FRANCE METROPOLITAINE',
+        telephone_client: userPhone ?? '',
+        gsm_client:       userPhone ?? '',
+        mail_client:      tempEmail ?? '',
+        pays_naissance:   'FRANCE METROPOLITAINE',
+        type_permis:      'B',
+        date_permis2:     '',
+        type_permis2:     '',
+        date_permis3:     '',
+        type_permis3:     '',
+        retrait_permis:   'NON',
+      });
+      const cr = await fetch(`${BASE}recherche_client.php?${client}`, OPTS);
+      console.log('[AssurFill/JLAssur] client HTTP', cr.status, await cr.text());
+
+      // ── 3. Validation dates ──────────────────────────────────────────────
+      if (profil.obtention_B && profil.date_naissance) {
+        const dv = new URLSearchParams({
+          date1:    toJLDate(profil.obtention_B),
+          naissance: toJLDate(profil.date_naissance),
+        });
+        const dr = await fetch(`${BASE}verif_date_ajax2.php?${dv}`, OPTS);
+        console.log('[AssurFill/JLAssur] dates HTTP', dr.status, await dr.text());
+      }
+
+      console.log('[AssurFill/JLAssur] injection terminée');
+    } catch (e) {
+      console.error('[AssurFill/JLAssur]', e);
+    }
+  })();
 }
 
 // ── Réinitialiser ──────────────────────────────────────────────────────────
