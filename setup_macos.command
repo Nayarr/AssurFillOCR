@@ -13,7 +13,7 @@ export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PAT
 trap 'echo ""; echo "  ❌  Une erreur est survenue (voir ci-dessus)."; echo "  Appuie sur Entrée pour fermer."; read -r _' ERR
 
 REPO_URL="https://github.com/Nayarr/AssurFillOCR"
-INSTALL_DIR="${1:-$HOME/AssurFillOCR}"
+INSTALL_DIR="$HOME/AssurFillOCR"
 VENV_DIR="$INSTALL_DIR/.venv"
 SERVER_SCRIPT="$INSTALL_DIR/extension/ocr_server.py"
 PYTHON_MIN_MINOR=10
