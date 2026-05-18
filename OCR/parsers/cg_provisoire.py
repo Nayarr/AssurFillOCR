@@ -5,6 +5,7 @@ from .vehicle_ref import fix_marque_modele, PF_MAX, TOUS_MODELES
 
 _PLAQUE_WW_RE = re.compile(r"(WW-\d{3}-[A-Z]{2})", re.IGNORECASE)
 _ALGERIE_RE = re.compile(r"ALG[ÉE]RIE", re.IGNORECASE)
+_VIN_RE = re.compile(r"\b([A-HJ-NPR-Z0-9]{17})\b")
 
 
 def _est_candidat_modele(ligne: str) -> bool:
@@ -60,12 +61,14 @@ def parse(texts: list[str], scores: list[float]) -> dict:
         "marque": None,
         "modele": None,
         "puissance_fiscale": None,
+        "vin": None,
     }
 
     en_section_prop = False
     lignes_prop: list[str] = []
     dernier_label = None
     denomination_candidate: str | None = None
+    en_section_vin = False
 
     for i, (texte, score) in enumerate(zip(texts, scores)):
         if score < 0.4:
@@ -79,6 +82,26 @@ def parse(texts: list[str], scores: list[float]) -> dict:
             match = _PLAQUE_WW_RE.search(ligne)
             if match:
                 donnees["numero_immatriculation"] = match.group(1).upper()
+
+        # VIN (champ E) : inline ou sur la ligne suivante
+        if donnees["vin"] is None:
+            if re.match(r"^\(?E[\.\s\)]", ligne, re.I):
+                match = _VIN_RE.search(ligne_maj)
+                if match:
+                    donnees["vin"] = match.group(1)
+                elif "IDENTIFICATION" in ligne_maj:
+                    en_section_vin = True
+            elif en_section_vin:
+                match = _VIN_RE.search(ligne_maj)
+                if match:
+                    donnees["vin"] = match.group(1)
+                    en_section_vin = False
+                elif ligne and not re.match(r"^\(", ligne):
+                    en_section_vin = False
+            else:
+                # Fallback : VIN isolé sur sa propre ligne
+                if re.match(r"^[A-HJ-NPR-Z0-9]{17}$", ligne_maj):
+                    donnees["vin"] = ligne_maj
 
         # Section propriétaire : déclenchée par "attribué à"
         if re.search(r"ATTRIBU", ligne_maj) and not en_section_prop:
