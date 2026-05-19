@@ -22,15 +22,22 @@ let droppedFiles = [];   // File[]
 let parsedProfil = null;
 
 // ── Téléphone utilisateur (persistant) ────────────────────────────────────
+// ── Frais de dossier automatiques (ville × durée → €) ─────────────────────
+const FEE_TABLE = {
+  '91290': { 1: 24, 3: 33, 5: 40,  8: 50, 10: 55, 15: 63, 21: 55, 30: 62 }, // Arpajon
+  '34000': { 1: 34, 3: 38, 5: 44,  8: 55, 10: 60, 15: 63, 21: 52, 30: 43 }, // Montpellier
+  '27000': { 1: 19, 3: 28, 5: 30,  8: 30, 10: 29, 15: 23, 21: 57, 30: 43 }, // Évreux
+  // Toussieu, Neuilly-Plaisance, Villeurbanne, Gagny ou aucune ville sélectionnée
+  default: { 1: 19, 3: 28, 5: 40,  8: 50, 10: 55, 15: 63, 21: 57, 30: 62 },
+};
+
 const phoneInput    = document.getElementById('user-phone');
 const citySelect    = document.getElementById('city-select');
 const durationSelect = document.getElementById('duration-select');
-const feeInput      = document.getElementById('fee-input');
-chrome.storage.local.get(['parsedProfil', 'userPhone', 'cityPostalCode', 'durationDays', 'fraisCourtage'], ({ parsedProfil: saved, userPhone, cityPostalCode, durationDays, fraisCourtage }) => {
-  if (userPhone)           phoneInput.value    = userPhone;
-  if (cityPostalCode)      citySelect.value    = cityPostalCode;
-  if (durationDays)        durationSelect.value = durationDays;
-  if (fraisCourtage != null) feeInput.value    = fraisCourtage;
+chrome.storage.local.get(['parsedProfil', 'userPhone', 'cityPostalCode', 'durationDays'], ({ parsedProfil: saved, userPhone, cityPostalCode, durationDays }) => {
+  if (userPhone)      phoneInput.value    = userPhone;
+  if (cityPostalCode) citySelect.value    = cityPostalCode;
+  if (durationDays)   durationSelect.value = durationDays;
   if (saved) {
     parsedProfil = saved;
     afficherResultat(saved);
@@ -44,9 +51,6 @@ citySelect.addEventListener('change', () => {
 });
 durationSelect.addEventListener('change', () => {
   chrome.storage.local.set({ durationDays: durationSelect.value });
-});
-feeInput.addEventListener('input', () => {
-  chrome.storage.local.set({ fraisCourtage: parseFloat(feeInput.value) || 0 });
 });
 
 // ── Drop zone ──────────────────────────────────────────────────────────────
@@ -226,7 +230,8 @@ document.getElementById('btn-injecter').addEventListener('click', async () => {
     const cityPostalCode = citySelect.value || null;
     const cityName       = citySelect.selectedOptions[0]?.textContent.trim().replace(/\s*\(.*\)/, '') || null;
     const durationDays   = document.getElementById('duration-select').value || null;
-    const fraisCourtage  = parseFloat(document.getElementById('fee-input').value) || 0;
+    const _feeCity = FEE_TABLE[cityPostalCode] ?? FEE_TABLE.default;
+    const fraisCourtage  = _feeCity[parseInt(durationDays, 10)] ?? 0;
 
     const tempEmail = genTempEmail();
     const tabId     = tab.id;
