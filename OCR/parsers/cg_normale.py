@@ -58,6 +58,8 @@ def parse(texts: list[str], scores: list[float]) -> dict:
         "marque": None,
         "modele": None,
         "puissance_fiscale": None,
+        "masse_max": None,
+        "nb_places": None,
     }
 
     dernier_label = None
@@ -105,6 +107,22 @@ def parse(texts: list[str], scores: list[float]) -> dict:
             else:
                 if re.match(r"^[A-HJ-NPR-Z0-9]{17}$", ligne.upper()):
                     donnees["vin"] = ligne.upper()
+
+        # Masse max (F.2) — inline (ex: "F,21635") ou label seul
+        if donnees["masse_max"] is None:
+            m = re.match(r"^F[.,\s]?2[\s.,)]*(\d{3,5})", ligne, re.I)
+            if m:
+                donnees["masse_max"] = int(m.group(1))
+            elif re.match(r"^F[.,\s]?2$", ligne, re.I):
+                dernier_label = "masse_max"
+
+        # Nb places assises (S.1) — inline (ex: "S.1-5") ou label seul
+        if donnees["nb_places"] is None:
+            m = re.match(r"^S[.,\s]?1[\s.,)\-]+(\d{1,2})", ligne, re.I)
+            if m and 1 <= int(m.group(1)) <= 20:
+                donnees["nb_places"] = int(m.group(1))
+            elif re.match(r"^S[.,\s]?1$", ligne, re.I):
+                dernier_label = "nb_places"
 
         # Plaque (champ A) : toute occurrence XX-NNN-XX non WW
         if donnees["numero_immatriculation"] is None:
@@ -208,6 +226,16 @@ def parse(texts: list[str], scores: list[float]) -> dict:
                 match = re.match(r"^(\d+)$", ligne)
                 if match and 1 <= int(match.group(1)) <= PF_MAX:
                     donnees["puissance_fiscale"] = int(match.group(1))
+                    dernier_label = None
+            elif dernier_label == "masse_max":
+                match = re.match(r"^(\d{3,5})$", ligne)
+                if match:
+                    donnees["masse_max"] = int(match.group(1))
+                    dernier_label = None
+            elif dernier_label == "nb_places":
+                match = re.match(r"^(\d{1,2})$", ligne)
+                if match and 1 <= int(match.group(1)) <= 20:
+                    donnees["nb_places"] = int(match.group(1))
                     dernier_label = None
 
         # Fallback P.6 : ligne multi-champs avec fusion possible
