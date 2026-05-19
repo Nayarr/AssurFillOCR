@@ -63,7 +63,6 @@ def parse(texts: list[str], scores: list[float]) -> dict:
         "puissance_fiscale": None,
         "vin": None,
         "masse_max": None,
-        "nb_places": None,
     }
 
     en_section_prop = False
@@ -73,7 +72,6 @@ def parse(texts: list[str], scores: list[float]) -> dict:
     en_section_vin = False
     _f_vals: list[int] = []
     en_section_f = False
-    en_section_s1 = False
 
     for i, (texte, score) in enumerate(zip(texts, scores)):
         if score < 0.4:
@@ -119,15 +117,6 @@ def parse(texts: list[str], scores: list[float]) -> dict:
                 _f_vals.append(int(ligne))
                 if len(_f_vals) == 2 and donnees["masse_max"] is None:
                     donnees["masse_max"] = _f_vals[1]
-
-        # Nb places assises S.1 — valeur = premier entier ≤ 20 après le label
-        if re.search(r"\(?S[.\s]?1[\)\s]|ASSISES", ligne_maj):
-            en_section_s1 = True
-        if en_section_s1 and donnees["nb_places"] is None:
-            m = re.match(r"^(\d{1,2})$", ligne)
-            if m and 1 <= int(m.group(1)) <= 20:
-                donnees["nb_places"] = int(m.group(1))
-                en_section_s1 = False
 
         # Section propriétaire : déclenchée par "attribué à"
         if re.search(r"ATTRIBU", ligne_maj) and not en_section_prop:
