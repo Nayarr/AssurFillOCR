@@ -25,10 +25,12 @@ let parsedProfil = null;
 const phoneInput    = document.getElementById('user-phone');
 const citySelect    = document.getElementById('city-select');
 const durationSelect = document.getElementById('duration-select');
-chrome.storage.local.get(['parsedProfil', 'userPhone', 'cityPostalCode', 'durationDays'], ({ parsedProfil: saved, userPhone, cityPostalCode, durationDays }) => {
-  if (userPhone)      phoneInput.value    = userPhone;
-  if (cityPostalCode) citySelect.value    = cityPostalCode;
-  if (durationDays)   durationSelect.value = durationDays;
+const feeInput      = document.getElementById('fee-input');
+chrome.storage.local.get(['parsedProfil', 'userPhone', 'cityPostalCode', 'durationDays', 'fraisCourtage'], ({ parsedProfil: saved, userPhone, cityPostalCode, durationDays, fraisCourtage }) => {
+  if (userPhone)           phoneInput.value    = userPhone;
+  if (cityPostalCode)      citySelect.value    = cityPostalCode;
+  if (durationDays)        durationSelect.value = durationDays;
+  if (fraisCourtage != null) feeInput.value    = fraisCourtage;
   if (saved) {
     parsedProfil = saved;
     afficherResultat(saved);
@@ -42,6 +44,9 @@ citySelect.addEventListener('change', () => {
 });
 durationSelect.addEventListener('change', () => {
   chrome.storage.local.set({ durationDays: durationSelect.value });
+});
+feeInput.addEventListener('input', () => {
+  chrome.storage.local.set({ fraisCourtage: parseFloat(feeInput.value) || 0 });
 });
 
 // ── Drop zone ──────────────────────────────────────────────────────────────
@@ -221,6 +226,7 @@ document.getElementById('btn-injecter').addEventListener('click', async () => {
     const cityPostalCode = citySelect.value || null;
     const cityName       = citySelect.selectedOptions[0]?.textContent.trim().replace(/\s*\(.*\)/, '') || null;
     const durationDays   = document.getElementById('duration-select').value || null;
+    const fraisCourtage  = parseFloat(document.getElementById('fee-input').value) || 0;
 
     const tempEmail = genTempEmail();
     const tabId     = tab.id;
@@ -235,7 +241,7 @@ document.getElementById('btn-injecter').addEventListener('click', async () => {
     await chrome.scripting.executeScript({
       target: { tabId },
       func:   site.inject,
-      args:   [profil, userPhone, tempEmail, cityPostalCode, durationDays, cityName],
+      args:   [profil, userPhone, tempEmail, cityPostalCode, durationDays, cityName, fraisCourtage],
       world:  'MAIN',
     });
 
@@ -296,7 +302,7 @@ function postReloadPlusSimple() {
 }
 
 // ── PlusSimple : injection principale ─────────────────────────────────────
-function injecterProfilPlusSimple(profil, userPhone, tempEmail, cityPostalCode, durationDays) {
+function injecterProfilPlusSimple(profil, userPhone, tempEmail, cityPostalCode, durationDays, cityName, fraisCourtage) {
   const CITIES = {
     '69780': { insee_code: '69298', postal_code: '69780', name: 'TOUSSIEU' },
     '34000': { insee_code: '34172', postal_code: '34000', name: 'MONTPELLIER' },
@@ -653,6 +659,23 @@ function injecterProfilPlusSimple(profil, userPhone, tempEmail, cityPostalCode, 
       return r.json();
     };
 
+    // Cherche récursivement la prime nette HT dans un objet JSON (réponse API)
+    const _findPrimeNette = (obj, depth = 0) => {
+      if (!obj || typeof obj !== 'object' || depth > 7) return null;
+      const PRICE_KEYS = ['price_ht', 'base_price', 'net_premium', 'premium_ht',
+                          'prime_ht', 'prime_nette', 'net_price', 'base'];
+      for (const key of PRICE_KEYS) {
+        if (key in obj && typeof obj[key] === 'number' && obj[key] > 0.5 && obj[key] < 2000) {
+          return obj[key];
+        }
+      }
+      for (const val of Object.values(obj)) {
+        const found = _findPrimeNette(val, depth + 1);
+        if (found !== null) return found;
+      }
+      return null;
+    };
+
     // Helper : upsert une entrée dans le tableau criterias
     const upsert = (criterias, key, value) => {
       const e = criterias.find(c => c.key === key);
@@ -742,6 +765,9 @@ function injecterProfilPlusSimple(profil, userPhone, tempEmail, cityPostalCode, 
         console.log('[AssurFill] ville injectée:', CITIES[cityPostalCode].name);
       }
 
+      // Frais de courtage = 0 : injecté directement dans le PUT principal
+      if (!fraisCourtage) upsert(criterias, 'choice_fee_broker_added_percent', 0.0);
+
       const putBody = { 'plussimple-car-shorttermcontainer': { criterias } };
       console.log('[AssurFill] PUT body (extrait):', JSON.stringify(putBody).slice(0, 400));
       const putResp = await fetch(apiUrl, {
@@ -751,6 +777,24 @@ function injecterProfilPlusSimple(profil, userPhone, tempEmail, cityPostalCode, 
       console.log('[AssurFill] PUT criterias HTTP', putResp.status);
       const putText = await putResp.text();
       console.log('[AssurFill] PUT réponse:', putText.slice(0, 200));
+
+      // Frais de courtage > 0 : calcul percent = frais / prime_nette_HT * 100
+      if (fraisCourtage > 0) {
+        let primeNette = null;
+        try { primeNette = _findPrimeNette(JSON.parse(putText)); } catch (_) {}
+        if (primeNette) {
+          const feePercent = fraisCourtage / primeNette * 100;
+          console.log('[AssurFill] frais de courtage:', fraisCourtage, '€ → prime nette:', primeNette, '€ → percent:', feePercent.toFixed(4));
+          upsert(criterias, 'choice_fee_broker_added_percent', feePercent);
+          const feeResp = await fetch(apiUrl, {
+            method: 'PUT', headers, credentials: 'include', mode: 'cors',
+            body: JSON.stringify({ 'plussimple-car-shorttermcontainer': { criterias } }),
+          });
+          console.log('[AssurFill] PUT frais de courtage HTTP', feeResp.status);
+        } else {
+          console.warn('[AssurFill] prime nette introuvable — frais non injectés.\nRéponse PUT pour debug:', putText.slice(0, 800));
+        }
+      }
     } catch (e) {
       console.error('[AssurFill] sauvegarde API:', e);
     }
