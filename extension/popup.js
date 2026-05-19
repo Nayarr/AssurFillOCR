@@ -14,6 +14,8 @@ const RESULT_FIELDS = [
   { key: 'marque',                 label: 'Marque' },
   { key: 'modele',                 label: 'Modèle' },
   { key: 'puissance_fiscale',      label: 'Puissance fiscale' },
+  { key: 'nb_places',              label: 'Nb places (S.1)' },
+  { key: 'masse_max',              label: 'Masse max F.2 (kg)' },
   { key: 'vin',                    label: 'VIN' },
 ];
 
