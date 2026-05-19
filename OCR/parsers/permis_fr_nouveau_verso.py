@@ -105,7 +105,6 @@ def parse(texts: list[str], scores: list[float]) -> dict:
     candidate = (
         dates_categories.get("B")
         or dates_categories.get("B1")
-        or dates_categories.get("AM")
     )
 
     if candidate is None and all_dates:

@@ -22,6 +22,15 @@ let droppedFiles = [];   // File[]
 let parsedProfil = null;
 
 // ── Téléphone utilisateur (persistant) ────────────────────────────────────
+// ── Frais de dossier automatiques (ville × durée → €) ─────────────────────
+const FEE_TABLE = {
+  '91290': { 1: 24, 3: 33, 5: 40,  8: 50, 10: 55, 15: 63, 21: 55, 30: 62 }, // Arpajon
+  '34000': { 1: 34, 3: 38, 5: 44,  8: 55, 10: 60, 15: 63, 21: 52, 30: 43 }, // Montpellier
+  '27000': { 1: 19, 3: 28, 5: 30,  8: 30, 10: 29, 15: 23, 21: 57, 30: 43 }, // Évreux
+  // Toussieu, Neuilly-Plaisance, Villeurbanne, Gagny ou aucune ville sélectionnée
+  default: { 1: 19, 3: 28, 5: 40,  8: 50, 10: 55, 15: 63, 21: 57, 30: 62 },
+};
+
 const phoneInput    = document.getElementById('user-phone');
 const citySelect    = document.getElementById('city-select');
 const durationSelect = document.getElementById('duration-select');
@@ -121,9 +130,8 @@ document.getElementById('btn-lancer').addEventListener('click', async () => {
   btn.disabled = true;
   btn.textContent = 'Analyse en cours…';
   hideError();
-  document.getElementById('result').style.display    = 'none';
-  document.getElementById('btn-injecter').style.display = 'none';
-  document.getElementById('status').style.display    = 'none';
+  document.getElementById('result').style.display = 'none';
+  document.getElementById('status').style.display = 'none';
 
   const fd = new FormData();
   droppedFiles.forEach(f => fd.append('files', f));
@@ -212,15 +220,18 @@ const SITES = [
 
 // ── Injecter ───────────────────────────────────────────────────────────────
 document.getElementById('btn-injecter').addEventListener('click', async () => {
-  if (!parsedProfil) return;
-
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab?.id) return;
 
   try {
+    const profil         = parsedProfil ?? {};
     const userPhone      = document.getElementById('user-phone').value.trim() || null;
-    const cityPostalCode = document.getElementById('city-select').value || null;
+    const citySelect     = document.getElementById('city-select');
+    const cityPostalCode = citySelect.value || null;
+    const cityName       = citySelect.selectedOptions[0]?.textContent.trim().replace(/\s*\(.*\)/, '') || null;
     const durationDays   = document.getElementById('duration-select').value || null;
+    const _feeCity = FEE_TABLE[cityPostalCode] ?? FEE_TABLE.default;
+    const fraisCourtage  = _feeCity[parseInt(durationDays, 10)] ?? 0;
 
     const tempEmail = genTempEmail();
     const tabId     = tab.id;
@@ -235,7 +246,7 @@ document.getElementById('btn-injecter').addEventListener('click', async () => {
     await chrome.scripting.executeScript({
       target: { tabId },
       func:   site.inject,
-      args:   [parsedProfil, userPhone, tempEmail, cityPostalCode, durationDays],
+      args:   [profil, userPhone, tempEmail, cityPostalCode, durationDays, cityName, fraisCourtage],
       world:  'MAIN',
     });
 
@@ -246,7 +257,7 @@ document.getElementById('btn-injecter').addEventListener('click', async () => {
         chrome.scripting.executeScript({
           target: { tabId },
           func:   site.postReload,
-          args:   [cityPostalCode],
+          args:   [profil, cityPostalCode],
           world:  'MAIN',
         }).catch(e => console.error('[AssurFill] post-reload:', e));
       };
@@ -296,7 +307,7 @@ function postReloadPlusSimple() {
 }
 
 // ── PlusSimple : injection principale ─────────────────────────────────────
-function injecterProfilPlusSimple(profil, userPhone, tempEmail, cityPostalCode, durationDays) {
+function injecterProfilPlusSimple(profil, userPhone, tempEmail, cityPostalCode, durationDays, cityName, fraisCourtage) {
   const CITIES = {
     '69780': { insee_code: '69298', postal_code: '69780', name: 'TOUSSIEU' },
     '34000': { insee_code: '34172', postal_code: '34000', name: 'MONTPELLIER' },
@@ -653,6 +664,23 @@ function injecterProfilPlusSimple(profil, userPhone, tempEmail, cityPostalCode, 
       return r.json();
     };
 
+    // Cherche récursivement la prime nette HT dans un objet JSON (réponse API)
+    const _findPrimeNette = (obj, depth = 0) => {
+      if (!obj || typeof obj !== 'object' || depth > 7) return null;
+      const PRICE_KEYS = ['price_ht', 'base_price', 'net_premium', 'premium_ht',
+                          'prime_ht', 'prime_nette', 'net_price', 'base'];
+      for (const key of PRICE_KEYS) {
+        if (key in obj && typeof obj[key] === 'number' && obj[key] > 0.5 && obj[key] < 2000) {
+          return obj[key];
+        }
+      }
+      for (const val of Object.values(obj)) {
+        const found = _findPrimeNette(val, depth + 1);
+        if (found !== null) return found;
+      }
+      return null;
+    };
+
     // Helper : upsert une entrée dans le tableau criterias
     const upsert = (criterias, key, value) => {
       const e = criterias.find(c => c.key === key);
@@ -742,6 +770,9 @@ function injecterProfilPlusSimple(profil, userPhone, tempEmail, cityPostalCode, 
         console.log('[AssurFill] ville injectée:', CITIES[cityPostalCode].name);
       }
 
+      // Frais de courtage = 0 : injecté directement dans le PUT principal
+      if (!fraisCourtage) upsert(criterias, 'choice_fee_broker_added_percent', 0.0);
+
       const putBody = { 'plussimple-car-shorttermcontainer': { criterias } };
       console.log('[AssurFill] PUT body (extrait):', JSON.stringify(putBody).slice(0, 400));
       const putResp = await fetch(apiUrl, {
@@ -751,6 +782,24 @@ function injecterProfilPlusSimple(profil, userPhone, tempEmail, cityPostalCode, 
       console.log('[AssurFill] PUT criterias HTTP', putResp.status);
       const putText = await putResp.text();
       console.log('[AssurFill] PUT réponse:', putText.slice(0, 200));
+
+      // Frais de courtage > 0 : calcul percent = frais / prime_nette_HT * 100
+      if (fraisCourtage > 0) {
+        let primeNette = null;
+        try { primeNette = _findPrimeNette(JSON.parse(putText)); } catch (_) {}
+        if (primeNette) {
+          const feePercent = fraisCourtage / primeNette * 100;
+          console.log('[AssurFill] frais de courtage:', fraisCourtage, '€ → prime nette:', primeNette, '€ → percent:', feePercent.toFixed(4));
+          upsert(criterias, 'choice_fee_broker_added_percent', feePercent);
+          const feeResp = await fetch(apiUrl, {
+            method: 'PUT', headers, credentials: 'include', mode: 'cors',
+            body: JSON.stringify({ 'plussimple-car-shorttermcontainer': { criterias } }),
+          });
+          console.log('[AssurFill] PUT frais de courtage HTTP', feeResp.status);
+        } else {
+          console.warn('[AssurFill] prime nette introuvable — frais non injectés.\nRéponse PUT pour debug:', putText.slice(0, 800));
+        }
+      }
     } catch (e) {
       console.error('[AssurFill] sauvegarde API:', e);
     }
@@ -787,113 +836,84 @@ function injecterProfilPlusSimple(profil, userPhone, tempEmail, cityPostalCode, 
       }
     }
 
-    console.log('[AssurFill] sauvegarde terminée — rechargement de la page');
-    location.reload();
+    const _champsComplets = ['date_naissance', 'numero_permis', 'obtention_B',
+      'numero_immatriculation', 'marque', 'modele', 'puissance_fiscale'];
+    if (_champsComplets.every(k => profil[k] != null)) {
+      console.log('[AssurFill] sauvegarde terminée — rechargement de la page');
+      location.reload();
+    } else {
+      console.log('[AssurFill] sauvegarde terminée — pas de rechargement (champs incomplets)');
+    }
   }, fillDelay + 6000);
 }
 
 // ── JL Assur : injection (jlassure.com) ───────────────────────────────────
-function injecterProfilJLAssur(profil, userPhone, tempEmail, cityPostalCode, _durationDays) {
-  const CITIES = {
-    '69780': { postal_code: '69780', name: 'TOUSSIEU' },
-    '34000': { postal_code: '34000', name: 'MONTPELLIER' },
-    '91290': { postal_code: '91290', name: 'ARPAJON' },
-    '27000': { postal_code: '27000', name: 'EVREUX' },
-    '93360': { postal_code: '93360', name: 'NEUILLY-PLAISANCE' },
-    '69100': { postal_code: '69100', name: 'VILLEURBANNE' },
-    '93220': { postal_code: '93220', name: 'GAGNY' },
-  };
-
-  // YYYY-MM-DD ou DD/MM/YYYY → DD-MM-YYYY
-  function toJLDate(d) {
+function injecterProfilJLAssur(_profil, _userPhone, _tempEmail, _cityPostalCode, _durationDays, _cityName) {
+  function toJL(d) {
     if (!d) return '';
-    if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return `${d.slice(8,10)}-${d.slice(5,7)}-${d.slice(0,4)}`;
-    return String(d).replace(/\//g, '-');
+    const s = String(d).trim();
+    const m = s.match(/^(\d{4})[\/\-](\d{2})[\/\-](\d{2})$/);
+    if (m) return `${m[3]}-${m[2]}-${m[1]}`;
+    return s.replace(/\//g, '-');
+  }
+  function fill(id, val) {
+    if (val == null || val === '') return;
+    const el = document.getElementById(id);
+    if (el) el.value = val;
+  }
+  function fillByName(name, val) {
+    if (val == null || val === '') return;
+    const el = document.querySelector(`[name="${name}"]`);
+    if (el) el.value = val;
   }
 
-  function toCivilite(sexe) {
-    if (!sexe) return 'MR';
-    return /^f/i.test(sexe) ? 'MME' : 'MR';
+  // ── Radios : questions 1–14 → NON (choix_2, choix_4, …)
+  for (let i = 1; i <= 14; i++) {
+    const el = document.getElementById(`choix_${i * 2}`);
+    if (el) el.checked = true;
   }
+  ['choix_pologne_non', 'choix_pologne_france'].forEach(id => {
+    const e = document.getElementById(id); if (e) e.checked = true;
+  });
+  ['retrait_permis', 'mode_acquisition', 'assist'].forEach(name => {
+    const e = document.querySelector(`input[name="${name}"][value="NON"]`); if (e) e.checked = true;
+  });
 
-  // La page a un bug de récursion infinie entre cascade() et onMotifAssuranceTemporaireChange()
-  // déclenché lors de l'injection — on pose un guard avant toute opération.
-  if (typeof window.onMotifAssuranceTemporaireChange === 'function') {
-    const _orig = window.onMotifAssuranceTemporaireChange;
-    let _running = false;
-    window.onMotifAssuranceTemporaireChange = function(...args) {
-      if (_running) return;
-      _running = true;
-      try { return _orig.apply(this, args); } finally { _running = false; }
-    };
-  }
+  // ── Selects
+  fill('select', 'VP');
+  fill('categorie', 'VP');
+  fillByName('civilite_client', 'MR');
+  const motif = document.getElementById('motif_assurance_temporaire');
+  if (motif && !motif.value) motif.value = 'achat_vente';
+  fillByName('vehi_location',   'NON');
+  fill('pays_immat',            'FRANCE METROPOLITAINE');
+  fillByName('pays_naissance',  'FRANCE METROPOLITAINE');
+  fillByName('pays_residence',  'FRANCE METROPOLITAINE');
+  fillByName('pays_permis',     'FRANCE METROPOLITAINE');
+  fillByName('type_permis',     'B');
 
-  const cityObj = cityPostalCode ? CITIES[cityPostalCode] : null;
-  const BASE    = 'https://www.jlassure.com//sousfiche/gestion_app/';
-  const OPTS    = { method: 'GET', credentials: 'include', mode: 'cors' };
+  // ── Conducteur
+  fill('nom_client',       _profil.nom);
+  fill('prenom_client',    _profil.prenom ?? _profil.proprietaire_prenom);
+  fill('naissance',        toJL(_profil.date_naissance));
+  fill('num_permis',       _profil.numero_permis);
+  fill('date_permis',      toJL(_profil.obtention_B));
+  fill('adresse1',         _cityName);
+  fill('code_postal',      _cityPostalCode);
+  fill('ville',            _cityName);
+  fill('telephone_client', _userPhone);
+  fill('gsm_client',       _userPhone);
+  fill('mail_client',      _tempEmail);
 
-  (async () => {
-    try {
-      // ── 1. Véhicule ──────────────────────────────────────────────────────
-      const vehi = new URLSearchParams({
-        immatriculation: profil.numero_immatriculation ?? '',
-        mise_circulation: '',
-        chassis:          profil.vin ?? '',
-        pays_immat:       'FRANCE METROPOLITAINE',
-        marque:           profil.marque ?? '',
-        modele:           profil.modele ?? '',
-        categorie:        'VP',
-        puissance:        profil.puissance_fiscale != null ? String(profil.puissance_fiscale) : '',
-        ptc:              '',
-        place:            '',
-        valeur_argus:     '',
-        vehi_location:    'NON',
-      });
-      const vr = await fetch(`${BASE}recherche_vehicule.php?${vehi}`, OPTS);
-      console.log('[AssurFill/JLAssur] véhicule HTTP', vr.status, await vr.text());
+  // ── Véhicule
+  fill('immatriculation', _profil.numero_immatriculation);
+  fill('chassis',         _profil.vin);
+  fill('marque',          _profil.marque);
+  fill('modele',          _profil.modele);
+  if (_profil.puissance_fiscale != null) fill('puissance', String(_profil.puissance_fiscale));
+  fill('valeur_argus', '15000');
 
-      // ── 2. Client ────────────────────────────────────────────────────────
-      const client = new URLSearchParams({
-        nom:             profil.nom ?? profil.proprietaire_nom ?? '',
-        prenom:          profil.prenom ?? profil.proprietaire_prenom ?? '',
-        naissance:       toJLDate(profil.date_naissance),
-        civilite:        toCivilite(profil.sexe),
-        adresse:         cityObj ? `${cityObj.name} ${cityObj.postal_code}` : '',
-        code_postal:     cityObj?.postal_code ?? '',
-        ville:           cityObj?.name ?? '',
-        pays_residence:  'FRANCE METROPOLITAINE',
-        num_permis:      profil.numero_permis ?? '',
-        date_permis:     toJLDate(profil.obtention_B),
-        pays_permis:     'FRANCE METROPOLITAINE',
-        telephone_client: userPhone ?? '',
-        gsm_client:       userPhone ?? '',
-        mail_client:      tempEmail ?? '',
-        pays_naissance:   'FRANCE METROPOLITAINE',
-        type_permis:      'B',
-        date_permis2:     '',
-        type_permis2:     '',
-        date_permis3:     '',
-        type_permis3:     '',
-        retrait_permis:   'NON',
-      });
-      const cr = await fetch(`${BASE}recherche_client.php?${client}`, OPTS);
-      console.log('[AssurFill/JLAssur] client HTTP', cr.status, await cr.text());
-
-      // ── 3. Validation dates ──────────────────────────────────────────────
-      if (profil.obtention_B && profil.date_naissance) {
-        const dv = new URLSearchParams({
-          date1:    toJLDate(profil.obtention_B),
-          naissance: toJLDate(profil.date_naissance),
-        });
-        const dr = await fetch(`${BASE}verif_date_ajax2.php?${dv}`, OPTS);
-        console.log('[AssurFill/JLAssur] dates HTTP', dr.status, await dr.text());
-      }
-
-      console.log('[AssurFill/JLAssur] injection terminée');
-    } catch (e) {
-      console.error('[AssurFill/JLAssur]', e);
-    }
-  })();
+  console.log('[AssurFill/JLAssur] champs remplis — cliquez Suivant pour continuer');
 }
 
 // ── Réinitialiser ──────────────────────────────────────────────────────────
@@ -903,10 +923,9 @@ document.getElementById('btn-reset').addEventListener('click', () => {
   droppedFiles = [];
   renderThumbs();
   updateBtn();
-  document.getElementById('result').style.display    = 'none';
-  document.getElementById('btn-injecter').style.display = 'none';
+  document.getElementById('result').style.display   = 'none';
   document.getElementById('btn-reset').style.display = 'none';
-  document.getElementById('status').style.display    = 'none';
+  document.getElementById('status').style.display   = 'none';
   hideError();
 });
 

@@ -4,7 +4,7 @@ MARQUES: frozenset[str] = frozenset({
     'ABARTH', 'AIWAYS', 'ALEKO', 'ALFA ROMEO', 'ALPINE RENAULT', 'ARO', 'ASIA',
     'ASTON MARTIN', 'AUDI', 'AUSTIN', 'AUSTIN HEALEY', 'AUTOBIANCHI', 'AUVERLAND',
     'BEDFORD', 'BEE BEE AUTOMOTIVE', 'BENTLEY', 'BENTLEY UK', 'BERTONE', 'BMW',
-    'BUICK', 'BYD', 'CADILLAC', 'CHEVROLET', 'CHEVROLET US', 'CHRYSLER', 'CITROEN',
+    'BUICK', 'BYD', 'CADILLAC', 'CHERY', 'CHEVROLET', 'CHEVROLET US', 'CHRYSLER', 'CITROEN',
     'COURB', 'CUPRA', 'DACIA', 'DAEWOO', 'DAF', 'DAIHATSU', 'DAIMLER', 'DATSUN',
     'DODGE', 'DODGE US', 'DS', 'EBRO', 'FERRARI', 'FEST', 'FIAT', 'FISKER',
     'FORD', 'FORD US', 'FSO-POLSKI', 'GAC GONOW', 'GME', 'GRANDIN', 'HONDA',
@@ -31,6 +31,7 @@ _MODELES_BRUTS: dict[str, list[str]] = {
     'BENTLEY':      ['Bentayga', 'Continental', 'Flying Spur', 'Mulsanne'],
     'BMW':          ['i3', 'i4', 'i7', 'iX', 'Série 1', 'Série 2', 'Série 3', 'Série 4', 'Série 5', 'Série 6', 'Série 7', 'Série 8', 'X1', 'X2', 'X3', 'X4', 'X5', 'X6', 'X7', 'Z3', 'Z4'],
     'BYD':          ['Atto 3', 'Han', 'Seal', 'Tang'],
+    'CHERY':        ['Arrizo 5', 'Arrizo 6', 'Arrizo 8', 'Tiggo 3', 'Tiggo 4', 'Tiggo 5', 'Tiggo 7', 'Tiggo 8'],
     'CHEVROLET':    ['Camaro', 'Captiva', 'Corvette', 'Cruze', 'Epica', 'Equinox', 'Lacetti', 'Malibu', 'Matiz', 'Nubira', 'Orlando', 'Spark', 'Suburban', 'Tahoe', 'Traverse', 'Trax', 'Volt'],
     'CHRYSLER':     ['300C', 'Grand Voyager', 'Neon', 'PT Cruiser', 'Sebring', 'Stratus', 'Voyager'],
     'CITROEN':      ['Berlingo', 'C1', 'C2', 'C3', 'C3 Aircross', 'C4', 'C4 Cactus', 'C4 Picasso', 'C5', 'C5 Aircross', 'C5 X', 'C6', 'C8', 'Dispatch', 'DS3', 'DS4', 'DS5', 'Grand C4', 'Jumpy', 'Nemo', 'Saxo', 'SpaceTourer', 'Xantia', 'Xsara', 'ZX'],
@@ -88,6 +89,107 @@ for _marque, _modeles in _MODELES_BRUTS.items():
 # Puissance fiscale maximale admise sur une CG
 MAX_PF = 12
 PF_MAX = MAX_PF  # alias de compatibilité
+
+# Nombre de places assises (S1) par modèle — clés en majuscules (post fix_marque_modele)
+# Défaut : 5 si modèle absent du mapping
+PLACES_ASSISES: dict[str, int] = {
+    # ── 2 places ──────────────────────────────────────────────────────────────
+    # Roadsters / coupés purs
+    'MX-5': 2, 'MX-30': 2,
+    '124 SPIDER': 2,
+    '718 BOXSTER': 2, 'BOXSTER': 2,
+    '718 CAYMAN': 2,  'CAYMAN': 2,
+    '918': 2,
+    'Z3': 2, 'Z4': 2,
+    'CORVETTE': 2,
+    'NSX': 2,
+    'RX-7': 2,
+    'TWIZY': 2,
+    'VANTAGE': 2,
+    # Ferrari 2 places
+    '296 GTB': 2, '488': 2, 'F430': 2, 'F8': 2, 'LAFERRARI': 2,
+    'SF90': 2, 'TESTAROSSA': 2, 'ROMA': 2,
+    # Lamborghini
+    'AVENTADOR': 2, 'GALLARDO': 2, 'HURACÁN': 2, 'MURCIÉLAGO': 2, 'DIABLO': 2,
+    # Smart 2 places
+    'FORTWO': 2, 'EQ FORTWO': 2,
+    # ── 4 places ──────────────────────────────────────────────────────────────
+    'TT': 4,
+    '911': 4,
+    'FORFOUR': 4,
+    # Ferrari 2+2
+    '575': 4, '612': 4, 'CALIFORNIA': 4, 'GTC4LUSSO': 4, 'PORTOFINO': 4,
+    # Aston Martin 2+2
+    'DB7': 4, 'DB9': 4, 'DB11': 4, 'DBS': 4, 'RAPIDE': 4,
+    # ── 7 places ──────────────────────────────────────────────────────────────
+    # Peugeot
+    '5008': 7, 'RIFTER': 7,
+    # Dacia
+    'LODGY': 7, 'JOGGER': 7,
+    # Renault
+    'ESPACE': 7, 'GRAND ESPACE': 7,
+    'GRAND SCÉNIC': 7, 'GRAND SCENIC': 7,
+    # Citroën
+    'GRAND C4': 7, 'GRAND C4 PICASSO': 7,
+    # Ford
+    'GALAXY': 7, 'S-MAX': 7, 'GRAND C-MAX': 7, 'EXPLORER': 7,
+    # Volkswagen
+    'SHARAN': 7, 'TOURAN': 7, 'MULTIVAN': 7,
+    # Seat
+    'ALHAMBRA': 7,
+    # Opel
+    'ZAFIRA': 7,
+    # Toyota
+    'VERSO': 7, 'LAND CRUISER': 7, 'PROACE': 7,
+    # Kia
+    'SORENTO': 7, 'CARENS': 7, 'EV9': 7, 'TELLURIDE': 7,
+    # Hyundai
+    'TRAJET': 7, 'SANTA FE': 7,
+    # Mitsubishi
+    'OUTLANDER': 7, 'OUTLANDER PHEV': 7, 'PAJERO': 7,
+    # Skoda
+    'KODIAQ': 7,
+    # Land Rover
+    'DISCOVERY': 7,
+    # Dodge
+    'JOURNEY': 7, 'DURANGO': 7,
+    # Jeep
+    'COMMANDER': 7,
+    # Mazda
+    '5': 7, 'CX-9': 7,
+    # Chrysler / Lancia
+    'GRAND VOYAGER': 7, 'VOYAGER': 7,
+    'PHEDRA': 7, 'ULYSSE': 7,
+    # Mercedes
+    'GLS': 7,
+    # BMW
+    'X7': 7,
+    # Volvo
+    'XC90': 7, 'EX90': 7,
+    # BYD
+    'TANG': 7,
+    # Chevrolet
+    'CAPTIVA': 7, 'ORLANDO': 7, 'TRAVERSE': 7, 'TAHOE': 7,
+    # Honda
+    'STREAM': 7, 'PILOT': 7, 'FR-V': 7,
+    # Nissan
+    'PATHFINDER': 7,
+    # ── 8 places ──────────────────────────────────────────────────────────────
+    'C8': 8, '807': 8,
+    # Hyundai
+    'H-1': 8, 'I800': 8,
+    # Kia
+    'CARNIVAL': 8,
+    # Chevrolet
+    'SUBURBAN': 8,
+    # ── 9 places ──────────────────────────────────────────────────────────────
+    'SPACETOURER': 9, 'TRAVELLER': 9,
+    'CARAVELLE': 9,
+    'STARIA': 9,
+    # Renault / Nissan / Opel / Citroën / Peugeot : vans utilitaires passagers
+    'TRAFIC': 9, 'PRIMASTAR': 9, 'VIVARO': 9, 'JUMPY': 9, 'EXPERT': 9,
+    'DISPATCH': 9,
+}
 
 
 def marque_approx(chaine: str, seuil: float = 0.82) -> str | None:

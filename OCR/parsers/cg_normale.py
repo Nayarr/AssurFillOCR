@@ -4,6 +4,7 @@ from difflib import get_close_matches
 from .vehicle_ref import fix_marque_modele, PF_MAX, marque_approx, TOUS_MODELES, MARQUES
 
 _PLAQUE_RE = re.compile(r"([A-Z]{2}-\d{3}-[A-Z]{2})")
+_VIN_RE = re.compile(r"\b([A-HJ-NPR-Z0-9]{17})\b")
 
 _MOTS_CLES_SOCIETE = re.compile(
     r"\b(SAS|SARL|SA\b|SNC|EURL|SCO|SASU|LOCATION|LEASING|SERVICES?|"
@@ -57,9 +58,11 @@ def parse(texts: list[str], scores: list[float]) -> dict:
         "marque": None,
         "modele": None,
         "puissance_fiscale": None,
+        "masse_max": None,
     }
 
     dernier_label = None
+    en_section_vin = False
 
     for i, (texte, score) in enumerate(zip(texts, scores)):
         if score < 0.4:
@@ -83,6 +86,34 @@ def parse(texts: list[str], scores: list[float]) -> dict:
         if ligne.upper().startswith("CI<<"):
             _parser_ligne_ci(ligne, donnees)
             continue
+
+        # VIN (champ E) — fallback si MRZ absent ou illisible
+        if donnees["vin"] is None:
+            if re.match(r"^\(?E[\.\s\)]", ligne, re.I):
+                # VIN inline sur la même ligne que le label (ex: "E.VSSZZZKJ4SR584228")
+                match = _VIN_RE.search(ligne.upper())
+                if match:
+                    donnees["vin"] = match.group(1)
+                elif "IDENTIFICATION" in ligne.upper():
+                    en_section_vin = True
+            elif en_section_vin:
+                match = _VIN_RE.search(ligne.upper())
+                if match:
+                    donnees["vin"] = match.group(1)
+                    en_section_vin = False
+                elif ligne and not re.match(r"^\(", ligne):
+                    en_section_vin = False
+            else:
+                if re.match(r"^[A-HJ-NPR-Z0-9]{17}$", ligne.upper()):
+                    donnees["vin"] = ligne.upper()
+
+        # Masse max (F.2) — inline (ex: "F,21635") ou label seul
+        if donnees["masse_max"] is None:
+            m = re.match(r"^F[.,\s]?2[\s.,)]*(\d{3,5})", ligne, re.I)
+            if m:
+                donnees["masse_max"] = int(m.group(1))
+            elif re.match(r"^F[.,\s]?2$", ligne, re.I):
+                dernier_label = "masse_max"
 
         # Plaque (champ A) : toute occurrence XX-NNN-XX non WW
         if donnees["numero_immatriculation"] is None:
@@ -186,6 +217,11 @@ def parse(texts: list[str], scores: list[float]) -> dict:
                 match = re.match(r"^(\d+)$", ligne)
                 if match and 1 <= int(match.group(1)) <= PF_MAX:
                     donnees["puissance_fiscale"] = int(match.group(1))
+                    dernier_label = None
+            elif dernier_label == "masse_max":
+                match = re.match(r"^(\d{3,5})$", ligne)
+                if match:
+                    donnees["masse_max"] = int(match.group(1))
                     dernier_label = None
 
         # Fallback P.6 : ligne multi-champs avec fusion possible
