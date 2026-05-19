@@ -23,6 +23,7 @@ from datetime import date
 
 from .merger import fusionner_texte, fusionner_date
 from parsers.vin_decoder import decode_marque
+from parsers.vehicle_ref import PLACES_ASSISES
 
 _AGE_MINIMUM_PERMIS = 17
 
@@ -153,7 +154,7 @@ def _profil_cg(cg: dict) -> dict:
         "modele": cg.get("modele"),
         "puissance_fiscale": cg.get("puissance_fiscale"),
         "masse_max": cg.get("masse_max"),
-        "nb_places": cg.get("nb_places"),
+        "nb_places": PLACES_ASSISES.get((cg.get("modele") or "").upper(), 5),
         "type_cg": "normale" if "normale" in type_raw else "provisoire",
         "proprietaire_nom": cg.get("proprietaire_nom"),
         "proprietaire_prenom": cg.get("proprietaire_prenom"),
