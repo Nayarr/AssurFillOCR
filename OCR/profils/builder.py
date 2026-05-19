@@ -22,6 +22,7 @@ Règles de fusion :
 from datetime import date
 
 from .merger import fusionner_texte, fusionner_date
+from parsers.vin_decoder import decode_marque
 
 _AGE_MINIMUM_PERMIS = 17
 
@@ -141,12 +142,18 @@ def _profil_permis_dz(recto: dict, verso: dict) -> tuple[dict, list[dict]]:
 
 def _profil_cg(cg: dict) -> dict:
     type_raw = cg.get("type", "")
+    marque = cg.get("marque")
+    vin = cg.get("vin")
+    if marque is None and vin:
+        marque = decode_marque(vin)
     return {
         "numero_immatriculation": cg.get("numero_immatriculation"),
-        "vin": cg.get("vin"),
-        "marque": cg.get("marque"),
+        "vin": vin,
+        "marque": marque,
         "modele": cg.get("modele"),
         "puissance_fiscale": cg.get("puissance_fiscale"),
+        "masse_max": cg.get("masse_max"),
+        "nb_places": cg.get("nb_places"),
         "type_cg": "normale" if "normale" in type_raw else "provisoire",
         "proprietaire_nom": cg.get("proprietaire_nom"),
         "proprietaire_prenom": cg.get("proprietaire_prenom"),
@@ -269,6 +276,8 @@ def construire_profil(
         "marque": profil_cg.get("marque"),
         "modele": profil_cg.get("modele"),
         "puissance_fiscale": profil_cg.get("puissance_fiscale"),
+        "masse_max": profil_cg.get("masse_max"),
+        "nb_places": profil_cg.get("nb_places"),
         "type_cg": profil_cg.get("type_cg"),
 
         # Propriétaire du véhicule (données brutes CG, avant fusion)
